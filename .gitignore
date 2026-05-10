@@ -1,0 +1,14 @@
+.agents/
+.codex/
+.vscode/
+
+build/
+install/
+log/
+
+__pycache__/
+*.py[cod]
+
+.colcon/
+*.bag
+*.db3

@@ -1,0 +1,10 @@
+laica_velocity_predictor:
+  ros__parameters:
+    load_cell_topic_name: "/load_cell/data"
+    encoder_topic_name: "/encoder/data"
+    predicted_cmd_vel_topic_name: "/laica/predicted_cmd_vel"
+    publish_rate: 50.0
+
+    # Use LoadCellData.raw_count directly as the model input.
+    # Do not normalize or map loadcell data to [-1, 1] here.
+    load_cell_input_field: "raw_count"

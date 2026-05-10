@@ -1,0 +1,23 @@
+<launch>
+  <arg
+    name="params_file"
+    default="$(find-pkg-share enc_lc)/config/params.yaml" />
+  <arg name="port" default="/dev/ttyUSB0" />
+  <arg name="baud" default="115200" />
+  <arg name="publish_rate" default="100.0" />
+  <arg name="load_cell_topic_name" default="/load_cell/data" />
+  <arg name="encoder_topic_name" default="/encoder/data" />
+
+  <node
+        pkg="enc_lc"
+        exec="arduino_sensor_pub"
+        name="arduino_sensor_pub"
+        output="screen">
+    <param from="$(var params_file)" />
+    <param name="port" value="$(var port)" />
+    <param name="baud" value="$(var baud)" />
+    <param name="publish_rate" value="$(var publish_rate)" />
+    <param name="load_cell_topic_name" value="$(var load_cell_topic_name)" />
+    <param name="encoder_topic_name" value="$(var encoder_topic_name)" />
+  </node>
+</launch>

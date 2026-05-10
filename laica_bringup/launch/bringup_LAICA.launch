@@ -1,0 +1,55 @@
+<launch>
+  <arg name="start_unitree_driver" default="true" />
+  <arg name="start_arduino_sensor_node" default="true" />
+
+  <arg
+    name="unitree_params_file"
+    default="$(find-pkg-share unitree_ros)/config/params.yaml" />
+  <arg
+    name="arduino_params_file"
+    default="$(find-pkg-share enc_lc)/config/params.yaml" />
+  <arg
+    name="predictor_params_file"
+    default="$(find-pkg-share laica_bringup)/config/velocity_predictor_params.yaml" />
+
+  <arg name="wifi" default="false" />
+  <arg name="unitree_robot_ip" default="192.168.123.161" />
+  <arg name="arduino_port" default="/dev/ttyACM0" />
+  <arg name="arduino_baud" default="115200" />
+  <arg name="arduino_publish_rate" default="100.0" />
+  <arg name="load_cell_topic_name" default="/load_cell/data" />
+  <arg name="encoder_topic_name" default="/encoder/data" />
+  <arg name="predicted_cmd_vel_topic_name" default="/laica/predicted_cmd_vel" />
+  <arg name="predictor_publish_rate" default="50.0" />
+
+  <include
+    file="$(find-pkg-share unitree_ros)/launch/unitree_driver_launch.py"
+    if="$(var start_unitree_driver)">
+    <arg name="params_file" value="$(var unitree_params_file)" />
+    <arg name="wifi" value="$(var wifi)" />
+    <arg name="robot_ip" value="$(var unitree_robot_ip)" />
+  </include>
+
+  <include
+    file="$(find-pkg-share enc_lc)/launch/sensors.launch"
+    if="$(var start_arduino_sensor_node)">
+    <arg name="params_file" value="$(var arduino_params_file)" />
+    <arg name="port" value="$(var arduino_port)" />
+    <arg name="baud" value="$(var arduino_baud)" />
+    <arg name="publish_rate" value="$(var arduino_publish_rate)" />
+    <arg name="load_cell_topic_name" value="$(var load_cell_topic_name)" />
+    <arg name="encoder_topic_name" value="$(var encoder_topic_name)" />
+  </include>
+
+  <node
+    pkg="laica_bringup"
+    exec="laica_velocity_predictor"
+    name="laica_velocity_predictor"
+    output="screen">
+    <param from="$(var predictor_params_file)" />
+    <param name="load_cell_topic_name" value="$(var load_cell_topic_name)" />
+    <param name="encoder_topic_name" value="$(var encoder_topic_name)" />
+    <param name="predicted_cmd_vel_topic_name" value="$(var predicted_cmd_vel_topic_name)" />
+    <param name="publish_rate" value="$(var predictor_publish_rate)" />
+  </node>
+</launch>
