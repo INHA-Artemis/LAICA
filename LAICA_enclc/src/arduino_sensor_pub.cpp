@@ -2,6 +2,7 @@
 
 #include <enc_lc/msg/encoder_data.hpp>
 #include <enc_lc/msg/load_cell_data.hpp>
+#include <enc_lc/msg/switch_data.hpp>
 
 #include <fcntl.h>
 #include <termios.h>
@@ -11,9 +12,11 @@
 #include <atomic>
 #include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -29,6 +32,9 @@ struct SensorFrame {
   double enc_deg = 0.0;
   double enc_rev = 0.0;
   int32_t enc_rpm = 0;
+  bool sw1 = false;
+  bool sw2 = false;
+  uint64_t sequence = 0;
 };
 
 speed_t baudToTermios(const int baud) {
@@ -75,7 +81,7 @@ bool parseSensorLine(const std::string& line, SensorFrame& frame) {
   }
 
   const std::vector<std::string> parts = splitComma(line.substr(header.size()));
-  if (parts.size() != 5) {
+  if (parts.size() != 5 && parts.size() != 7) {
     return false;
   }
 
@@ -85,6 +91,10 @@ bool parseSensorLine(const std::string& line, SensorFrame& frame) {
     frame.enc_deg = std::stod(parts[2]);
     frame.enc_rev = std::stod(parts[3]);
     frame.enc_rpm = std::stoi(parts[4]);
+    if (parts.size() == 7) {
+      frame.sw1 = std::stoi(parts[5]) != 0;
+      frame.sw2 = std::stoi(parts[6]) != 0;
+    }
   } catch (const std::exception&) {
     return false;
   }
@@ -196,6 +206,7 @@ private:
     SensorFrame parsed;
     if (parseSensorLine(line, parsed)) {
       std::lock_guard<std::mutex> lock(frame_mutex_);
+      parsed.sequence = frame_.sequence + 1;
       frame_ = parsed;
     } else if (line.front() != '#') {
       ++parse_errors_;
@@ -222,6 +233,8 @@ public:
         load_cell_topic_name_, rclcpp::QoS(rclcpp::KeepLast(10)).reliable());
     encoder_pub_ = create_publisher<enc_lc::msg::EncoderData>(
         encoder_topic_name_, rclcpp::QoS(rclcpp::KeepLast(10)).reliable());
+    switch_pub_ = create_publisher<enc_lc::msg::SwitchData>(
+        switch_topic_name_, rclcpp::QoS(rclcpp::KeepLast(10)).reliable());
 
     RCLCPP_INFO(get_logger(), "Connecting to Arduino on %s at %d baud",
                 port_.c_str(), baud_);
@@ -251,32 +264,47 @@ private:
     declare_parameter<double>("publish_rate", publish_rate_);
     declare_parameter<std::string>("frame_id_lc", frame_id_lc_);
     declare_parameter<std::string>("frame_id_enc", frame_id_enc_);
+    declare_parameter<std::string>("frame_id_switch", frame_id_switch_);
     declare_parameter<std::string>("load_cell_topic_name", load_cell_topic_name_);
     declare_parameter<std::string>("encoder_topic_name", encoder_topic_name_);
+    declare_parameter<std::string>("switch_topic_name", switch_topic_name_);
     declare_parameter<double>("force_gradient_n_per_mv", force_gradient_n_per_mv_);
     declare_parameter<double>("force_bias_n", force_bias_n_);
+    declare_parameter<double>("load_cell_startup_calibration_sec",
+                              load_cell_startup_calibration_sec_);
 
     get_parameter("port", port_);
     get_parameter("baud", baud_);
     get_parameter("publish_rate", publish_rate_);
     get_parameter("frame_id_lc", frame_id_lc_);
     get_parameter("frame_id_enc", frame_id_enc_);
+    get_parameter("frame_id_switch", frame_id_switch_);
     get_parameter("load_cell_topic_name", load_cell_topic_name_);
     get_parameter("encoder_topic_name", encoder_topic_name_);
+    get_parameter("switch_topic_name", switch_topic_name_);
     get_parameter("force_gradient_n_per_mv", force_gradient_n_per_mv_);
     get_parameter("force_bias_n", force_bias_n_);
+    get_parameter("load_cell_startup_calibration_sec",
+                  load_cell_startup_calibration_sec_);
   }
 
   void publishSensorData() {
     const SensorFrame frame = bridge_->getFrame();
+    if (frame.sequence == 0) {
+      return;
+    }
+
+    updateLoadCellStartupCalibration(frame);
     const rclcpp::Time now = get_clock()->now();
 
     enc_lc::msg::LoadCellData load_cell_msg;
     load_cell_msg.header.stamp = now;
     load_cell_msg.header.frame_id = frame_id_lc_;
-    load_cell_msg.raw_count = frame.lc_raw;
-    load_cell_msg.voltage_mv = frame.lc_mv;
-    load_cell_msg.force_n = frame.lc_mv * force_gradient_n_per_mv_ + force_bias_n_;
+    load_cell_msg.raw_count = calibratedRawCount(frame.lc_raw);
+    load_cell_msg.voltage_mv = frame.lc_mv - load_cell_voltage_offset_mv_;
+    load_cell_msg.force_n =
+        (frame.lc_mv * force_gradient_n_per_mv_ + force_bias_n_) -
+        load_cell_force_offset_n_;
     load_cell_pub_->publish(load_cell_msg);
 
     enc_lc::msg::EncoderData encoder_msg;
@@ -287,6 +315,13 @@ private:
     encoder_msg.rpm = frame.enc_rpm;
     encoder_pub_->publish(encoder_msg);
 
+    enc_lc::msg::SwitchData switch_msg;
+    switch_msg.header.stamp = now;
+    switch_msg.header.frame_id = frame_id_switch_;
+    switch_msg.switch_1 = frame.sw1;
+    switch_msg.switch_2 = frame.sw2;
+    switch_pub_->publish(switch_msg);
+
     if (bridge_->parseErrors() > 0) {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 10000,
                            "Arduino parse errors: %llu",
@@ -294,20 +329,84 @@ private:
     }
   }
 
+  void updateLoadCellStartupCalibration(const SensorFrame& frame) {
+    if (load_cell_startup_calibration_sec_ <= 0.0 ||
+        load_cell_startup_calibration_done_) {
+      return;
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    if (!load_cell_startup_calibration_started_) {
+      load_cell_startup_calibration_started_ = true;
+      load_cell_startup_calibration_start_ = now;
+      RCLCPP_INFO(get_logger(),
+                  "Starting %.2f s loadcell startup calibration. Keep the "
+                  "loadcell unloaded.",
+                  load_cell_startup_calibration_sec_);
+    }
+
+    load_cell_raw_sum_ += static_cast<double>(frame.lc_raw);
+    load_cell_voltage_sum_mv_ += frame.lc_mv;
+    ++load_cell_calibration_sample_count_;
+
+    load_cell_raw_offset_ =
+        load_cell_raw_sum_ /
+        static_cast<double>(load_cell_calibration_sample_count_);
+    load_cell_voltage_offset_mv_ =
+        load_cell_voltage_sum_mv_ /
+        static_cast<double>(load_cell_calibration_sample_count_);
+    load_cell_force_offset_n_ =
+        load_cell_voltage_offset_mv_ * force_gradient_n_per_mv_ + force_bias_n_;
+
+    const std::chrono::duration<double> elapsed =
+        now - load_cell_startup_calibration_start_;
+    if (elapsed.count() >= load_cell_startup_calibration_sec_) {
+      load_cell_startup_calibration_done_ = true;
+      RCLCPP_INFO(get_logger(),
+                  "Loadcell startup calibration complete: raw_offset=%.2f, "
+                  "voltage_offset=%.6f mV, force_offset=%.6f N (%llu samples)",
+                  load_cell_raw_offset_, load_cell_voltage_offset_mv_,
+                  load_cell_force_offset_n_,
+                  static_cast<unsigned long long>(
+                      load_cell_calibration_sample_count_));
+    }
+  }
+
+  int32_t calibratedRawCount(const int32_t raw_count) const {
+    const double calibrated =
+        std::round(static_cast<double>(raw_count) - load_cell_raw_offset_);
+    return static_cast<int32_t>(std::clamp(
+        calibrated, static_cast<double>(std::numeric_limits<int32_t>::min()),
+        static_cast<double>(std::numeric_limits<int32_t>::max())));
+  }
+
   std::string port_ = "/dev/ttyUSB0";
   int baud_ = 115200;
   double publish_rate_ = 100.0;
   std::string frame_id_lc_ = "load_cell";
   std::string frame_id_enc_ = "encoder";
+  std::string frame_id_switch_ = "switch";
   std::string load_cell_topic_name_ = "/load_cell/data";
   std::string encoder_topic_name_ = "/encoder/data";
+  std::string switch_topic_name_ = "/switch/data";
   double force_gradient_n_per_mv_ = 1.0;
   double force_bias_n_ = 0.0;
+  double load_cell_startup_calibration_sec_ = 5.0;
+  bool load_cell_startup_calibration_started_ = false;
+  bool load_cell_startup_calibration_done_ = false;
+  std::chrono::steady_clock::time_point load_cell_startup_calibration_start_;
+  uint64_t load_cell_calibration_sample_count_ = 0;
+  double load_cell_raw_sum_ = 0.0;
+  double load_cell_voltage_sum_mv_ = 0.0;
+  double load_cell_raw_offset_ = 0.0;
+  double load_cell_voltage_offset_mv_ = 0.0;
+  double load_cell_force_offset_n_ = 0.0;
 
   std::unique_ptr<ArduinoBridge> bridge_;
   rclcpp::TimerBase::SharedPtr publish_timer_;
   rclcpp::Publisher<enc_lc::msg::LoadCellData>::SharedPtr load_cell_pub_;
   rclcpp::Publisher<enc_lc::msg::EncoderData>::SharedPtr encoder_pub_;
+  rclcpp::Publisher<enc_lc::msg::SwitchData>::SharedPtr switch_pub_;
 };
 
 int main(int argc, char** argv) {

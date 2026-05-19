@@ -98,8 +98,8 @@ LAICA_enclc/
 
 ```
 # enc_lc ready
-$SENSORS,-12543,2.3456,152.3,11.644,110
-$SENSORS,-12540,2.3453,152.5,11.645,110
+$SENSORS,-12543,2.3456,152.3,11.644,110,0,1
+$SENSORS,-12540,2.3453,152.5,11.645,110,0,1
 ...
 ```
 
@@ -241,7 +241,7 @@ force_bias_n: 0.05122
 Arduino Mega가 USB로 전송하는 포맷입니다.
 
 ```
-$SENSORS,<lc_raw>,<lc_mv>,<enc_deg>,<enc_rev>,<enc_rpm>\r\n
+$SENSORS,<lc_raw>,<lc_mv>,<enc_deg>,<enc_rev>,<enc_rpm>,<sw1>,<sw2>\r\n
 ```
 
 | 필드 | 설명 | 예시 |
@@ -251,6 +251,8 @@ $SENSORS,<lc_raw>,<lc_mv>,<enc_deg>,<enc_rev>,<enc_rpm>\r\n
 | `enc_deg` | 절대 각도 [°], 소수점 1자리 | `152.3` |
 | `enc_rev` | 누적 회전수, 소수점 3자리 | `11.644` |
 | `enc_rpm` | 회전 속도 [RPM] | `110` |
+| `sw1` | 22번 핀 스위치 상태, 닫힘/눌림 = 1 | `0` |
+| `sw2` | 23번 핀 스위치 상태, 닫힘/눌림 = 1 | `1` |
 
 ---
 

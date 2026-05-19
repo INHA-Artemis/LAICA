@@ -17,6 +17,7 @@ find_package(std_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/EncoderData.msg"
   "msg/LoadCellData.msg"
+  "msg/SwitchData.msg"
   DEPENDENCIES std_msgs
 )
 

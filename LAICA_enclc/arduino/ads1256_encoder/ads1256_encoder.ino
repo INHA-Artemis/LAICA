@@ -19,6 +19,10 @@
  *  PDWN           │ 49
  *  5V / GND       │ 5V / GND
  *
+ *  Switch inputs  │ Mega
+ *  Switch 1       │ 22 (pressed = HIGH, released = LOW)
+ *  Switch 2       │ 23 (pressed = HIGH, released = LOW)
+ *
  *  DYLY-108 load cell → ADS1256
  *  Red   (Exc+)   │ 5V (or external regulated supply)
  *  Black (Exc-)   │ GND
@@ -26,13 +30,14 @@
  *  White (Sig-)   │ AIN1
  *
  * ── Serial output format (USB, OUT_BAUD) ─────────────────────────────────
- *  $SENSORS,<lc_raw>,<lc_mv>,<enc_deg>,<enc_rev>,<enc_rpm>\r\n
+ *  $SENSORS,<lc_raw>,<lc_mv>,<enc_deg>,<enc_rev>,<enc_rpm>,<sw1>,<sw2>\r\n
  *
  *    lc_raw   : signed 24-bit ADC count (differential AIN0−AIN1)
  *    lc_mv    : differential voltage [mV], 4 decimal places
  *    enc_deg  : absolute angle [0.0 – 359.9]°, 1 decimal place
  *    enc_rev  : cumulative revolutions, 3 decimal places
  *    enc_rpm  : rotation speed [RPM]
+ *    sw1/sw2  : switch state, 1 = closed/pressed, 0 = open
  *
  * ── ADS1256 configuration ────────────────────────────────────────────────
  *  PGA = 64  → full-scale input ±39.1 mV  (typical for mV-level load cells)
@@ -56,7 +61,7 @@
 #define PGA_SEL     64        // ADS1256 PGA: 1/2/4/8/16/32/64
 
 // Output mode:
-//   1 = ROS mode:      $SENSORS,<lc_raw>,<lc_mv>,<enc_deg>,<enc_rev>,<enc_rpm>
+//   1 = ROS mode:      $SENSORS,<lc_raw>,<lc_mv>,<enc_deg>,<enc_rev>,<enc_rpm>,<sw1>,<sw2>
 //   2 = Monitor mode:  readable labels for Arduino Serial Monitor
 #define ROS_MODE      1
 #define MONITOR_MODE  2
@@ -66,6 +71,13 @@
 #define ADS_CS    53
 #define ADS_DRDY  48
 #define ADS_PDWN  49
+#define SW1_PIN   22
+#define SW2_PIN   23
+
+// Switch polarity:
+//   HIGH = switch/sensor output goes to 5V when pressed.
+//   LOW  = switch shorts to GND when pressed; use INPUT_PULLUP below.
+#define SWITCH_PRESSED_LEVEL HIGH
 
 // ─── ADS1256 constants ────────────────────────────────────────────────────
 #define CMD_WAKEUP  0x00
@@ -111,6 +123,9 @@ static float   lc_mv         = 0.0f;
 static float   enc_deg       = 0.0f;
 static float   enc_rev       = 0.0f;
 static int     enc_rpm       = 0;
+
+static int     sw1_state     = 0;
+static int     sw2_state     = 0;
 
 static char    enc_buf[64];
 static uint8_t enc_len       = 0;
@@ -232,7 +247,11 @@ static void print_ros_frame() {
     Serial.print(',');
     Serial.print(enc_rev, 3);
     Serial.print(',');
-    Serial.println(enc_rpm);
+    Serial.print(enc_rpm);
+    Serial.print(',');
+    Serial.print(sw1_state);
+    Serial.print(',');
+    Serial.println(sw2_state);
 }
 
 static void print_monitor_frame() {
@@ -245,7 +264,11 @@ static void print_monitor_frame() {
     Serial.print(F("  rev="));
     Serial.print(enc_rev, 3);
     Serial.print(F("  rpm="));
-    Serial.println(enc_rpm);
+    Serial.print(enc_rpm);
+    Serial.print(F("  ||  Switch | sw1="));
+    Serial.print(sw1_state);
+    Serial.print(F("  sw2="));
+    Serial.println(sw2_state);
 }
 
 static void print_output_frame() {
@@ -264,6 +287,8 @@ void setup() {
     pinMode(ADS_CS,   OUTPUT);
     pinMode(ADS_DRDY, INPUT);
     pinMode(ADS_PDWN, OUTPUT);
+    pinMode(SW1_PIN,  INPUT);
+    pinMode(SW2_PIN,  INPUT);
 
     digitalWrite(ADS_CS,   HIGH);
     digitalWrite(ADS_PDWN, HIGH);
@@ -300,7 +325,11 @@ void loop() {
         }
     }
 
-    // ── 3. Output at fixed rate ──
+    // ── 3. Read switches ──
+    sw1_state = (digitalRead(SW1_PIN) == SWITCH_PRESSED_LEVEL) ? 1 : 0;
+    sw2_state = (digitalRead(SW2_PIN) == SWITCH_PRESSED_LEVEL) ? 1 : 0;
+
+    // ── 4. Output at fixed rate ──
     unsigned long now = millis();
     if (now - last_out_ms >= OUT_INTERVAL) {
         last_out_ms = now;

@@ -6,14 +6,20 @@ arduino_sensor_pub:
 
     frame_id_lc: "load_cell"
     frame_id_enc: "encoder"
+    frame_id_switch: "switch"
 
     load_cell_topic_name: "/load_cell/data"
     encoder_topic_name: "/encoder/data"
+    switch_topic_name: "/switch/data"
 
     # Active voltage-based calibration pair loaded by arduino_sensor_pub:
     #   force_n = force_gradient_n_per_mv * voltage_mv + force_bias_n
     force_gradient_n_per_mv: 283.07
-    force_bias_n: 0.05122
+    force_bias_n: 22.05122
+
+    # Average the first N seconds of loadcell readings and subtract that
+    # startup baseline from raw_count, voltage_mv, and force_n.
+    load_cell_startup_calibration_sec: 5.0
 
     # Current experimental pair kept for reference:
     # force_gradient_n_per_mv: 1.318e-03

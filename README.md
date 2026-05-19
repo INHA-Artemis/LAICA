@@ -104,16 +104,19 @@ publishes:
 /laica/predicted_cmd_vel    geometry_msgs/msg/Twist
 ```
 
-For now, the algorithm is a placeholder. It always publishes zero velocity:
+It implements a conservative 1D force admittance controller:
 
 ```text
-linear.x  = 0
-linear.y  = 0
-linear.z  = 0
-angular.x = 0
-angular.y = 0
-angular.z = 0
+M * d(v_adm)/dt + B * v_adm = F_eff
+cmd_vel.linear.x = base_velocity_mps + v_adm
 ```
+
+Only `linear.x` is commanded. `linear.y` and `angular.z` stay zero for the
+first force-only controller. Encoder data is subscribed for compatibility, but
+is not required by default.
+
+The force signal is zeroed at startup, low-pass filtered, passed through a
+deadband, integrated by the admittance model, then clamped and rate-limited.
 
 ## Hyperparameter And Topic Settings
 
@@ -132,12 +135,30 @@ laica_velocity_predictor:
     encoder_topic_name: "/encoder/data"
     predicted_cmd_vel_topic_name: "/laica/predicted_cmd_vel"
     publish_rate: 50.0
-    load_cell_input_field: "raw_count"
+    load_cell_input_field: "force_n"
+    admittance_enabled: true
+    require_encoder: false
+    auto_zero_force: true
+    zero_force_duration_sec: 3.0
+    force_filter_tau_sec: 0.25
+    force_deadband_n: 10.0
+    force_velocity_sign: 1.0
+    admittance_mass: 40.0
+    admittance_damping: 160.0
+    base_velocity_mps: 0.0
+    min_velocity_mps: 0.0
+    max_velocity_mps: 0.40
+    max_accel_mps2: 0.50
+    sensor_timeout_sec: 0.25
 ```
 
-The predictor uses `LoadCellData.raw_count` as the loadcell input. Do not map
-this value to `[-1, 1]` unless a future model explicitly requires a separate
-normalization step.
+The admittance controller should use `LoadCellData.force_n`. Keep the loadcell
+relaxed during the startup zeroing window so the predictor can subtract a local
+force offset before computing velocity.
+
+Use `force_velocity_sign` to choose whether positive calibrated force should
+increase or decrease `linear.x`. Start by publishing to `/laica/predicted_cmd_vel`
+and inspect the output before remapping to `/cmd_vel`.
 
 Launch arguments can override these values:
 
@@ -154,6 +175,12 @@ Launch arguments can override these values:
 | `encoder_topic_name` | `/encoder/data` | Encoder topic |
 | `predicted_cmd_vel_topic_name` | `/laica/predicted_cmd_vel` | Predictor output velocity topic |
 | `predictor_publish_rate` | `50.0` | Predictor output publish rate |
+| `load_cell_input_field` | `force_n` | Loadcell field used by the controller |
+| `admittance_enabled` | `true` | Enable force admittance output |
+| `force_deadband_n` | `10.0` | Ignore small force around zero |
+| `force_velocity_sign` | `1.0` | Sign from force to forward velocity |
+| `base_velocity_mps` | `0.0` | Constant forward velocity offset |
+| `max_velocity_mps` | `0.40` | Maximum `linear.x` output |
 
 Example:
 
@@ -161,7 +188,9 @@ Example:
 ros2 launch laica_bringup bringup_LAICA.launch \
   arduino_port:=/dev/ttyACM0 \
   predictor_publish_rate:=100.0 \
-  predicted_cmd_vel_topic_name:=/laica/predicted_cmd_vel
+  predicted_cmd_vel_topic_name:=/laica/predicted_cmd_vel \
+  force_deadband_n:=10.0 \
+  force_velocity_sign:=1.0
 ```
 
 ## Topic Naming Rule
@@ -262,6 +291,61 @@ Inspect a saved bag:
 
 ```bash
 ros2 bag info laica_YYYYMMDD_HHMMSS
+```
+
+## Aligned Odom Dataset
+
+For adaptive-control analysis, build a timestamp-aligned dataset with force,
+encoder angle, IMU, and robot odometry:
+
+```bash
+cd /home/artemis/Documents/LAICA_ws
+source install/setup.bash
+python3 src/laica_bringup/scripts/build_odom_dataset.py \
+  --output-dir /home/artemis/Documents/LAICA_ws/plots/odomDataset
+```
+
+The script reads all bags under:
+
+```text
+/home/artemis/Documents/rosbags
+```
+
+and writes:
+
+```text
+plots/odomDataset/laica_aligned_odom_dataset.csv
+plots/odomDataset/laica_bag_summary.csv
+plots/odomDataset/laica_group_summary.csv
+```
+
+The aligned dataset uses encoder timestamps as the reference and keeps rows
+only when force, IMU, and odom samples are within `30 ms`.
+
+Force is normalized per bag:
+
+```text
+force_dev  = force_n - median(force_n)
+force_norm = force_dev / MAD(force_n)
+```
+
+Interaction labels are based on this normalized force:
+
+```text
+pull        force_norm <= -1
+push        force_norm >=  1
+strong_pull force_norm <= -2
+strong_push force_norm >=  2
+neutral     otherwise
+```
+
+Use `/odom` velocity fields for walking-pace and adaptive-control analysis:
+
+```text
+odom.twist.twist.linear.x
+odom.twist.twist.linear.y
+odom.twist.twist.angular.z
+odom.speed_xy
 ```
 
 ## Docker

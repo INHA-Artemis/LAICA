@@ -4,7 +4,40 @@ laica_velocity_predictor:
     encoder_topic_name: "/encoder/data"
     predicted_cmd_vel_topic_name: "/laica/predicted_cmd_vel"
     publish_rate: 50.0
+    sensor_qos_reliability: "best_effort"
 
-    # Use LoadCellData.raw_count directly as the model input.
-    # Do not normalize or map loadcell data to [-1, 1] here.
-    load_cell_input_field: "raw_count"
+    # Select predictor input from enc_lc/msg/LoadCellData.
+    # raw_count avoids calibration data. force_n uses calibrated force.
+    # Options: raw_count, voltage_mv, force_n
+    load_cell_input_field: "force_n"
+
+    # 1D force admittance controller:
+    #
+    #   M * d(v_adm)/dt + B * v_adm = F_eff
+    #   cmd_vx = base_velocity_mps + v_adm
+    #
+    # The output still goes to /laica/predicted_cmd_vel by default. Only remap
+    # predicted_cmd_vel_topic_name to /cmd_vel when testing with a clear safety
+    # procedure and no other /cmd_vel publisher.
+    admittance_enabled: true
+    require_encoder: false
+
+    # Average the first few seconds and subtract it from the force signal.
+    # Keep the loadcell relaxed during this window.
+    auto_zero_force: true
+    zero_force_duration_sec: 3.0
+
+    # Force conditioning. Our data showed small force/odom changes can be noise,
+    # so start with a conservative deadband and filter.
+    force_filter_tau_sec: 0.25
+    force_deadband_n: 10.0
+    force_velocity_sign: 1.0
+
+    # Admittance parameters and safety limits.
+    admittance_mass: 40.0
+    admittance_damping: 160.0
+    base_velocity_mps: 0.0
+    min_velocity_mps: 0.0
+    max_velocity_mps: 0.40
+    max_accel_mps2: 0.50
+    sensor_timeout_sec: 0.25

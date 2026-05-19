@@ -30,6 +30,19 @@ install(TARGETS laica_velocity_predictor
   DESTINATION lib/${PROJECT_NAME}
 )
 
+install(PROGRAMS
+  scripts/live_plot_sensors.py
+  scripts/live_plot_admittance.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  scripts/plot_rosbag_sensors.py
+  scripts/replot_all_rosbags_combined.sh
+  scripts/simulate_force_admittance.py
+  DESTINATION share/${PROJECT_NAME}/scripts
+)
+
 install(DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME}
 )

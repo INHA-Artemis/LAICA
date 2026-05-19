@@ -1,0 +1,51 @@
+plot_rosbag_sensors:
+  ros__parameters:
+    bag_paths:
+      - "/home/artemis/Documents/rosbags/05_17/demo_3"
+
+    output_dir: "/home/artemis/Documents/LAICA_ws/plots"
+    png_dir: ""
+    csv_dir: ""
+    output_prefix: "demo_3"
+
+    encoder_topic: "/encoder/data"
+    force_topic: "/load_cell/data"
+    imu_topic: "/imu"
+    cmd_vel_topic: "/laica/predicted_cmd_vel"
+    switch_topic: "/switch/data"
+
+    encoder_fields:
+      - "angle_deg"
+      - "rev"
+      - "rpm"
+    force_fields:
+      - "force_n"
+    imu_fields:
+      - "linear_acceleration.x"
+      - "linear_acceleration.z"
+    cmd_vel_fields:
+      - "linear.x"
+      - "linear.y"
+      - "angular.z"
+    switch_fields:
+      - "switch_1"
+      - "switch_2"
+
+    use_header_time: true
+    relative_time: true
+    save_csv: true
+    save_png: true
+    show_plots: false
+    highlight_switch_intervals: true
+    switch_highlight_fields:
+      - "switch_2"
+    switch_highlight_color: "tab:orange"
+    switch_highlight_alpha: 0.18
+    switch_press_debounce_sec: 0.25
+    switch_min_interval_sec: 0.5
+
+    # Plot-only cleanup. CSV files keep the original bag values.
+    wrap_encoder_angle_deg: true
+    filter_plot_outliers: true
+    outlier_mad_threshold: 8.0
+    outlier_min_samples: 12
