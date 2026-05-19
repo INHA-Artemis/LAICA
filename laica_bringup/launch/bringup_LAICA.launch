@@ -19,6 +19,9 @@
   <arg name="arduino_publish_rate" default="100.0" />
   <arg name="load_cell_topic_name" default="/load_cell/data" />
   <arg name="encoder_topic_name" default="/encoder/data" />
+  <arg
+    name="load_cell_calibration_done_topic_name"
+    default="/load_cell/calibration_done" />
   <arg name="load_cell_startup_calibration_sec" default="5.0" />
   <arg name="predicted_cmd_vel_topic_name" default="/laica/predicted_cmd_vel" />
   <arg name="predictor_publish_rate" default="50.0" />
@@ -26,6 +29,7 @@
   <arg name="load_cell_input_field" default="force_n" />
   <arg name="admittance_enabled" default="true" />
   <arg name="require_encoder" default="false" />
+  <arg name="require_load_cell_calibration_done" default="true" />
   <arg name="force_deadband_n" default="10.0" />
   <arg name="force_velocity_sign" default="1.0" />
   <arg name="base_velocity_mps" default="0.0" />
@@ -50,6 +54,9 @@
     <arg name="load_cell_topic_name" value="$(var load_cell_topic_name)" />
     <arg name="encoder_topic_name" value="$(var encoder_topic_name)" />
     <arg
+      name="load_cell_calibration_done_topic_name"
+      value="$(var load_cell_calibration_done_topic_name)" />
+    <arg
       name="load_cell_startup_calibration_sec"
       value="$(var load_cell_startup_calibration_sec)" />
   </include>
@@ -62,12 +69,18 @@
     <param from="$(var predictor_params_file)" />
     <param name="load_cell_topic_name" value="$(var load_cell_topic_name)" />
     <param name="encoder_topic_name" value="$(var encoder_topic_name)" />
+    <param
+      name="load_cell_calibration_done_topic_name"
+      value="$(var load_cell_calibration_done_topic_name)" />
     <param name="predicted_cmd_vel_topic_name" value="$(var predicted_cmd_vel_topic_name)" />
     <param name="publish_rate" value="$(var predictor_publish_rate)" />
     <param name="sensor_qos_reliability" value="$(var sensor_qos_reliability)" />
     <param name="load_cell_input_field" value="$(var load_cell_input_field)" />
     <param name="admittance_enabled" value="$(var admittance_enabled)" />
     <param name="require_encoder" value="$(var require_encoder)" />
+    <param
+      name="require_load_cell_calibration_done"
+      value="$(var require_load_cell_calibration_done)" />
     <param name="force_deadband_n" value="$(var force_deadband_n)" />
     <param name="force_velocity_sign" value="$(var force_velocity_sign)" />
     <param name="base_velocity_mps" value="$(var base_velocity_mps)" />

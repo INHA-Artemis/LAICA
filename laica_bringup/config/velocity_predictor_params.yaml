@@ -2,9 +2,11 @@ laica_velocity_predictor:
   ros__parameters:
     load_cell_topic_name: "/load_cell/data"
     encoder_topic_name: "/encoder/data"
+    load_cell_calibration_done_topic_name: "/load_cell/calibration_done"
     predicted_cmd_vel_topic_name: "/laica/predicted_cmd_vel"
     publish_rate: 50.0
     sensor_qos_reliability: "best_effort"
+    load_cell_subscription_mode: "typed"
 
     # Select predictor input from enc_lc/msg/LoadCellData.
     # raw_count avoids calibration data. force_n uses calibrated force.
@@ -21,6 +23,7 @@ laica_velocity_predictor:
     # procedure and no other /cmd_vel publisher.
     admittance_enabled: true
     require_encoder: false
+    require_load_cell_calibration_done: true
 
     # Average the first few seconds and subtract it from the force signal.
     # Keep the loadcell relaxed during this window.

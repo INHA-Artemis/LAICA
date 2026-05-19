@@ -3,6 +3,7 @@
 #include <enc_lc/msg/encoder_data.hpp>
 #include <enc_lc/msg/load_cell_data.hpp>
 #include <enc_lc/msg/switch_data.hpp>
+#include <std_msgs/msg/bool.hpp>
 
 #include <fcntl.h>
 #include <termios.h>
@@ -235,6 +236,9 @@ public:
         encoder_topic_name_, rclcpp::QoS(rclcpp::KeepLast(10)).reliable());
     switch_pub_ = create_publisher<enc_lc::msg::SwitchData>(
         switch_topic_name_, rclcpp::QoS(rclcpp::KeepLast(10)).reliable());
+    load_cell_calibration_done_pub_ = create_publisher<std_msgs::msg::Bool>(
+        load_cell_calibration_done_topic_name_,
+        rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local());
 
     RCLCPP_INFO(get_logger(), "Connecting to Arduino on %s at %d baud",
                 port_.c_str(), baud_);
@@ -268,6 +272,9 @@ private:
     declare_parameter<std::string>("load_cell_topic_name", load_cell_topic_name_);
     declare_parameter<std::string>("encoder_topic_name", encoder_topic_name_);
     declare_parameter<std::string>("switch_topic_name", switch_topic_name_);
+    declare_parameter<std::string>(
+        "load_cell_calibration_done_topic_name",
+        load_cell_calibration_done_topic_name_);
     declare_parameter<double>("force_gradient_n_per_mv", force_gradient_n_per_mv_);
     declare_parameter<double>("force_bias_n", force_bias_n_);
     declare_parameter<double>("load_cell_startup_calibration_sec",
@@ -282,6 +289,8 @@ private:
     get_parameter("load_cell_topic_name", load_cell_topic_name_);
     get_parameter("encoder_topic_name", encoder_topic_name_);
     get_parameter("switch_topic_name", switch_topic_name_);
+    get_parameter("load_cell_calibration_done_topic_name",
+                  load_cell_calibration_done_topic_name_);
     get_parameter("force_gradient_n_per_mv", force_gradient_n_per_mv_);
     get_parameter("force_bias_n", force_bias_n_);
     get_parameter("load_cell_startup_calibration_sec",
@@ -321,6 +330,10 @@ private:
     switch_msg.switch_1 = frame.sw1;
     switch_msg.switch_2 = frame.sw2;
     switch_pub_->publish(switch_msg);
+
+    std_msgs::msg::Bool calibration_done_msg;
+    calibration_done_msg.data = isLoadCellStartupCalibrationDone();
+    load_cell_calibration_done_pub_->publish(calibration_done_msg);
 
     if (bridge_->parseErrors() > 0) {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 10000,
@@ -372,6 +385,11 @@ private:
     }
   }
 
+  bool isLoadCellStartupCalibrationDone() const {
+    return load_cell_startup_calibration_sec_ <= 0.0 ||
+           load_cell_startup_calibration_done_;
+  }
+
   int32_t calibratedRawCount(const int32_t raw_count) const {
     const double calibrated =
         std::round(static_cast<double>(raw_count) - load_cell_raw_offset_);
@@ -389,6 +407,8 @@ private:
   std::string load_cell_topic_name_ = "/load_cell/data";
   std::string encoder_topic_name_ = "/encoder/data";
   std::string switch_topic_name_ = "/switch/data";
+  std::string load_cell_calibration_done_topic_name_ =
+      "/load_cell/calibration_done";
   double force_gradient_n_per_mv_ = 1.0;
   double force_bias_n_ = 0.0;
   double load_cell_startup_calibration_sec_ = 5.0;
@@ -407,6 +427,8 @@ private:
   rclcpp::Publisher<enc_lc::msg::LoadCellData>::SharedPtr load_cell_pub_;
   rclcpp::Publisher<enc_lc::msg::EncoderData>::SharedPtr encoder_pub_;
   rclcpp::Publisher<enc_lc::msg::SwitchData>::SharedPtr switch_pub_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr
+      load_cell_calibration_done_pub_;
 };
 
 int main(int argc, char** argv) {

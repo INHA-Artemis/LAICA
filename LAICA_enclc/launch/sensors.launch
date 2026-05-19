@@ -7,6 +7,9 @@
   <arg name="publish_rate" default="100.0" />
   <arg name="load_cell_topic_name" default="/load_cell/data" />
   <arg name="encoder_topic_name" default="/encoder/data" />
+  <arg
+    name="load_cell_calibration_done_topic_name"
+    default="/load_cell/calibration_done" />
   <arg name="load_cell_startup_calibration_sec" default="5.0" />
 
   <node
@@ -20,6 +23,9 @@
     <param name="publish_rate" value="$(var publish_rate)" />
     <param name="load_cell_topic_name" value="$(var load_cell_topic_name)" />
     <param name="encoder_topic_name" value="$(var encoder_topic_name)" />
+    <param
+      name="load_cell_calibration_done_topic_name"
+      value="$(var load_cell_calibration_done_topic_name)" />
     <param
       name="load_cell_startup_calibration_sec"
       value="$(var load_cell_startup_calibration_sec)" />

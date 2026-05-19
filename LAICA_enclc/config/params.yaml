@@ -11,6 +11,7 @@ arduino_sensor_pub:
     load_cell_topic_name: "/load_cell/data"
     encoder_topic_name: "/encoder/data"
     switch_topic_name: "/switch/data"
+    load_cell_calibration_done_topic_name: "/load_cell/calibration_done"
 
     # Active voltage-based calibration pair loaded by arduino_sensor_pub:
     #   force_n = force_gradient_n_per_mv * voltage_mv + force_bias_n

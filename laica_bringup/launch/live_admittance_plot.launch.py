@@ -1,7 +1,9 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
+from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
@@ -11,7 +13,11 @@ def generate_launch_description():
     cmd_vel_topic = LaunchConfiguration("cmd_vel_topic")
     odom_topic = LaunchConfiguration("odom_topic")
     show_odom = LaunchConfiguration("show_odom")
-    time_source = LaunchConfiguration("time_source")
+    predictor_params_file = PathJoinSubstitution([
+        FindPackageShare("laica_bringup"),
+        "config",
+        "velocity_predictor_params.yaml",
+    ])
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -31,7 +37,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "cmd_vel_topic",
-            default_value="/laica/predicted_cmd_vel",
+            default_value="/laica/admittance_cmd_vel",
             description="Admittance/predicted cmd_vel topic.",
         ),
         DeclareLaunchArgument(
@@ -44,13 +50,33 @@ def generate_launch_description():
             default_value="true",
             description="Whether to plot odom feedback.",
         ),
-        DeclareLaunchArgument(
-            "time_source",
-            default_value="arrival",
-            description=(
-                "Time axis source: arrival for rosbag replay with live cmd output, "
-                "or header for recorded sensor header stamps."
-            ),
+        Node(
+            package="laica_bringup",
+            executable="laica_velocity_predictor",
+            name="laica_velocity_predictor",
+            output="screen",
+            parameters=[
+                predictor_params_file,
+                {
+                    "load_cell_topic_name": force_topic,
+                    "load_cell_calibration_done_topic_name": "/load_cell/calibration_done",
+                    "predicted_cmd_vel_topic_name": cmd_vel_topic,
+                    "publish_rate": 50.0,
+                    "load_cell_input_field": "force_n",
+                    "sensor_qos_reliability": "reliable",
+                    "load_cell_subscription_mode": "typed",
+                    "admittance_enabled": True,
+                    "require_encoder": False,
+                    "require_load_cell_calibration_done": False,
+                    "auto_zero_force": True,
+                    "zero_force_duration_sec": 3.0,
+                    "force_deadband_n": 10.0,
+                    "force_velocity_sign": 1.0,
+                    "base_velocity_mps": 0.5,
+                    "max_velocity_mps": 0.80,
+                    "sensor_timeout_sec": 0.25,
+                },
+            ],
         ),
         Node(
             package="laica_bringup",
@@ -64,7 +90,7 @@ def generate_launch_description():
                 "cmd_vel_topic": cmd_vel_topic,
                 "odom_topic": odom_topic,
                 "show_odom": show_odom,
-                "time_source": time_source,
+                "time_source": "arrival",
             }],
         ),
     ])
