@@ -33,6 +33,7 @@ install(TARGETS laica_velocity_predictor
 )
 
 install(PROGRAMS
+  scripts/keyboard_teleop.py
   scripts/live_plot_sensors.py
   scripts/live_plot_admittance.py
   DESTINATION lib/${PROJECT_NAME}

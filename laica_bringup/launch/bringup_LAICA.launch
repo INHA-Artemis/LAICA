@@ -19,6 +19,7 @@
   <arg name="arduino_publish_rate" default="100.0" />
   <arg name="load_cell_topic_name" default="/load_cell/data" />
   <arg name="encoder_topic_name" default="/encoder/data" />
+  <arg name="switch_topic_name" default="/switch/data" />
   <arg
     name="load_cell_calibration_done_topic_name"
     default="/load_cell/calibration_done" />
@@ -30,11 +31,18 @@
   <arg name="admittance_enabled" default="true" />
   <arg name="require_encoder" default="false" />
   <arg name="require_load_cell_calibration_done" default="true" />
-  <arg name="force_deadband_n" default="10.0" />
+  <arg name="force_deadband_n" default="5.0" />
+  <arg name="force_filter_tau_sec" default="0.15" />
   <arg name="force_velocity_sign" default="1.0" />
-  <arg name="base_velocity_mps" default="0.0" />
-  <arg name="max_velocity_mps" default="0.40" />
+  <arg name="admittance_mass" default="20.0" />
+  <arg name="admittance_damping" default="80.0" />
+  <arg name="base_velocity_mps" default="0.5" />
+  <arg name="min_velocity_mps" default="-1.0" />
+  <arg name="max_velocity_mps" default="1.0" />
+  <arg name="max_accel_mps2" default="0.50" />
   <arg name="sensor_timeout_sec" default="0.25" />
+  <arg name="stop_switch_enabled" default="true" />
+  <arg name="stop_switch_field" default="switch_1" />
 
   <include
     file="$(find-pkg-share unitree_ros)/launch/unitree_driver_launch.py"
@@ -53,6 +61,7 @@
     <arg name="publish_rate" value="$(var arduino_publish_rate)" />
     <arg name="load_cell_topic_name" value="$(var load_cell_topic_name)" />
     <arg name="encoder_topic_name" value="$(var encoder_topic_name)" />
+    <arg name="switch_topic_name" value="$(var switch_topic_name)" />
     <arg
       name="load_cell_calibration_done_topic_name"
       value="$(var load_cell_calibration_done_topic_name)" />
@@ -69,6 +78,7 @@
     <param from="$(var predictor_params_file)" />
     <param name="load_cell_topic_name" value="$(var load_cell_topic_name)" />
     <param name="encoder_topic_name" value="$(var encoder_topic_name)" />
+    <param name="switch_topic_name" value="$(var switch_topic_name)" />
     <param
       name="load_cell_calibration_done_topic_name"
       value="$(var load_cell_calibration_done_topic_name)" />
@@ -82,9 +92,16 @@
       name="require_load_cell_calibration_done"
       value="$(var require_load_cell_calibration_done)" />
     <param name="force_deadband_n" value="$(var force_deadband_n)" />
+    <param name="force_filter_tau_sec" value="$(var force_filter_tau_sec)" />
     <param name="force_velocity_sign" value="$(var force_velocity_sign)" />
+    <param name="admittance_mass" value="$(var admittance_mass)" />
+    <param name="admittance_damping" value="$(var admittance_damping)" />
     <param name="base_velocity_mps" value="$(var base_velocity_mps)" />
+    <param name="min_velocity_mps" value="$(var min_velocity_mps)" />
     <param name="max_velocity_mps" value="$(var max_velocity_mps)" />
+    <param name="max_accel_mps2" value="$(var max_accel_mps2)" />
     <param name="sensor_timeout_sec" value="$(var sensor_timeout_sec)" />
+    <param name="stop_switch_enabled" value="$(var stop_switch_enabled)" />
+    <param name="stop_switch_field" value="$(var stop_switch_field)" />
   </node>
 </launch>

@@ -3,6 +3,7 @@ laica_velocity_predictor:
     load_cell_topic_name: "/load_cell/data"
     encoder_topic_name: "/encoder/data"
     load_cell_calibration_done_topic_name: "/load_cell/calibration_done"
+    switch_topic_name: "/switch/data"
     predicted_cmd_vel_topic_name: "/laica/predicted_cmd_vel"
     publish_rate: 50.0
     sensor_qos_reliability: "best_effort"
@@ -24,6 +25,8 @@ laica_velocity_predictor:
     admittance_enabled: true
     require_encoder: false
     require_load_cell_calibration_done: true
+    stop_switch_enabled: true
+    stop_switch_field: "switch_1"
 
     # Average the first few seconds and subtract it from the force signal.
     # Keep the loadcell relaxed during this window.
@@ -32,15 +35,15 @@ laica_velocity_predictor:
 
     # Force conditioning. Our data showed small force/odom changes can be noise,
     # so start with a conservative deadband and filter.
-    force_filter_tau_sec: 0.25
-    force_deadband_n: 10.0
+    force_filter_tau_sec: 0.15
+    force_deadband_n: 5.0
     force_velocity_sign: 1.0
 
     # Admittance parameters and safety limits.
-    admittance_mass: 40.0
-    admittance_damping: 160.0
-    base_velocity_mps: 0.0
-    min_velocity_mps: 0.0
-    max_velocity_mps: 0.40
+    admittance_mass: 20.0
+    admittance_damping: 80.0
+    base_velocity_mps: 0.5
+    min_velocity_mps: -1.0
+    max_velocity_mps: 1.0
     max_accel_mps2: 0.50
     sensor_timeout_sec: 0.25

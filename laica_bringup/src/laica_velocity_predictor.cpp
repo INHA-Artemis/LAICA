@@ -4,6 +4,7 @@
 
 #include <enc_lc/msg/encoder_data.hpp>
 #include <enc_lc/msg/load_cell_data.hpp>
+#include <enc_lc/msg/switch_data.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <std_msgs/msg/bool.hpp>
 
@@ -198,6 +199,15 @@ public:
                     this, std::placeholders::_1));
     }
 
+    if (stop_switch_enabled_)
+    {
+      switch_sub_ = create_subscription<enc_lc::msg::SwitchData>(
+          switch_topic_name_,
+          rclcpp::QoS(rclcpp::KeepLast(10)).reliable(),
+          std::bind(&LaicaVelocityPredictor::switchCallback,
+                    this, std::placeholders::_1));
+    }
+
     cmd_vel_pub_ = create_publisher<geometry_msgs::msg::Twist>(
         predicted_cmd_vel_topic_name_, rclcpp::QoS(rclcpp::KeepLast(10)).reliable());
 
@@ -234,6 +244,11 @@ public:
                 predicted_cmd_vel_topic_name_.c_str(),
                 admittance_enabled_ ? "true" : "false",
                 base_velocity_mps_, force_deadband_n_);
+    if (stop_switch_enabled_)
+    {
+      RCLCPP_INFO(get_logger(), "Stop switch enabled on %s.%s",
+                  switch_topic_name_.c_str(), stop_switch_field_.c_str());
+    }
   }
 
 private:
@@ -243,6 +258,7 @@ private:
     declare_parameter<std::string>("encoder_topic_name", encoder_topic_name_);
     declare_parameter<std::string>("load_cell_calibration_done_topic_name",
                                    load_cell_calibration_done_topic_name_);
+    declare_parameter<std::string>("switch_topic_name", switch_topic_name_);
     declare_parameter<std::string>("predicted_cmd_vel_topic_name",
                                    predicted_cmd_vel_topic_name_);
     declare_parameter<double>("publish_rate", publish_rate_);
@@ -251,9 +267,12 @@ private:
                                    load_cell_subscription_mode_);
     declare_parameter<std::string>("load_cell_input_field", load_cell_input_field_);
     declare_parameter<bool>("admittance_enabled", admittance_enabled_);
+    declare_parameter<bool>("log_load_cell_input", log_load_cell_input_);
     declare_parameter<bool>("require_encoder", require_encoder_);
     declare_parameter<bool>("require_load_cell_calibration_done",
                             require_load_cell_calibration_done_);
+    declare_parameter<bool>("stop_switch_enabled", stop_switch_enabled_);
+    declare_parameter<std::string>("stop_switch_field", stop_switch_field_);
     declare_parameter<bool>("auto_zero_force", auto_zero_force_);
     declare_parameter<double>("zero_force_duration_sec", zero_force_duration_sec_);
     declare_parameter<double>("force_filter_tau_sec", force_filter_tau_sec_);
@@ -271,15 +290,19 @@ private:
     get_parameter("encoder_topic_name", encoder_topic_name_);
     get_parameter("load_cell_calibration_done_topic_name",
                   load_cell_calibration_done_topic_name_);
+    get_parameter("switch_topic_name", switch_topic_name_);
     get_parameter("predicted_cmd_vel_topic_name", predicted_cmd_vel_topic_name_);
     get_parameter("publish_rate", publish_rate_);
     get_parameter("sensor_qos_reliability", sensor_qos_reliability_);
     get_parameter("load_cell_subscription_mode", load_cell_subscription_mode_);
     get_parameter("load_cell_input_field", load_cell_input_field_);
     get_parameter("admittance_enabled", admittance_enabled_);
+    get_parameter("log_load_cell_input", log_load_cell_input_);
     get_parameter("require_encoder", require_encoder_);
     get_parameter("require_load_cell_calibration_done",
                   require_load_cell_calibration_done_);
+    get_parameter("stop_switch_enabled", stop_switch_enabled_);
+    get_parameter("stop_switch_field", stop_switch_field_);
     get_parameter("auto_zero_force", auto_zero_force_);
     get_parameter("zero_force_duration_sec", zero_force_duration_sec_);
     get_parameter("force_filter_tau_sec", force_filter_tau_sec_);
@@ -319,6 +342,14 @@ private:
                   "Unsupported load_cell_subscription_mode '%s'. Falling back to serialized_auto.",
                   load_cell_subscription_mode_.c_str());
       load_cell_subscription_mode_ = "serialized_auto";
+    }
+
+    if (stop_switch_field_ != "switch_1" && stop_switch_field_ != "switch_2")
+    {
+      RCLCPP_WARN(get_logger(),
+                  "Unsupported stop_switch_field '%s'. Falling back to switch_1.",
+                  stop_switch_field_.c_str());
+      stop_switch_field_ = "switch_1";
     }
 
     publish_rate_ = std::max(publish_rate_, 1.0);
@@ -451,10 +482,13 @@ private:
 
     updateForceZero(latest_load_cell_input_);
 
-    RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
-                         "Loadcell %s input: %.6f",
-                         load_cell_input_field_.c_str(),
-                         latest_load_cell_input_);
+    if (log_load_cell_input_)
+    {
+      RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
+                           "Loadcell %s input: %.6f",
+                           load_cell_input_field_.c_str(),
+                           latest_load_cell_input_);
+    }
   }
 
   void encoderCallback(const enc_lc::msg::EncoderData::SharedPtr msg)
@@ -481,6 +515,23 @@ private:
     }
   }
 
+  void switchCallback(const enc_lc::msg::SwitchData::SharedPtr msg)
+  {
+    const bool pressed =
+        stop_switch_field_ == "switch_2" ? msg->switch_2 : msg->switch_1;
+
+    if (pressed && !stop_switch_pressed_)
+    {
+      RCLCPP_WARN(get_logger(), "Stop switch pressed; stopping admittance output");
+    }
+    else if (!pressed && stop_switch_pressed_)
+    {
+      RCLCPP_INFO(get_logger(), "Stop switch released; admittance output enabled");
+    }
+
+    stop_switch_pressed_ = pressed;
+  }
+
   void publishPredictedVelocity()
   {
     const auto now_time = now();
@@ -496,6 +547,12 @@ private:
     {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
                            "Waiting for required sensor data before prediction");
+      publishStopAndReset();
+      return;
+    }
+
+    if (stop_switch_enabled_ && stop_switch_pressed_)
+    {
       publishStopAndReset();
       return;
     }
@@ -667,6 +724,7 @@ private:
   rclcpp::Subscription<enc_lc::msg::LoadCellData>::SharedPtr load_cell_sub_;
   rclcpp::GenericSubscription::SharedPtr load_cell_generic_sub_;
   rclcpp::Subscription<enc_lc::msg::EncoderData>::SharedPtr encoder_sub_;
+  rclcpp::Subscription<enc_lc::msg::SwitchData>::SharedPtr switch_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
       load_cell_calibration_done_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
@@ -674,6 +732,7 @@ private:
 
   std::string load_cell_topic_name_;
   std::string encoder_topic_name_;
+  std::string switch_topic_name_ = "/switch/data";
   std::string load_cell_calibration_done_topic_name_ =
       "/load_cell/calibration_done";
   std::string predicted_cmd_vel_topic_name_;
@@ -689,9 +748,13 @@ private:
   bool has_encoder_ = false;
 
   bool admittance_enabled_ = true;
+  bool log_load_cell_input_ = false;
   bool require_encoder_ = false;
   bool require_load_cell_calibration_done_ = false;
   bool load_cell_calibration_done_ = false;
+  bool stop_switch_enabled_ = true;
+  bool stop_switch_pressed_ = false;
+  std::string stop_switch_field_ = "switch_1";
   bool auto_zero_force_ = true;
   bool zero_started_ = false;
   bool zero_complete_ = false;
@@ -706,7 +769,7 @@ private:
   double force_velocity_sign_ = 1.0;
   double admittance_mass_ = 40.0;
   double admittance_damping_ = 160.0;
-  double base_velocity_mps_ = 0.0;
+  double base_velocity_mps_ = 0.5;
   double min_velocity_mps_ = 0.0;
   double max_velocity_mps_ = 0.40;
   double max_accel_mps2_ = 0.50;

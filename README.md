@@ -60,6 +60,30 @@ ros2 launch laica_bringup bringup_LAICA.launch \
   predicted_cmd_vel_topic_name:=/cmd_vel
 ```
 
+To drive manually with keyboard teleop:
+
+```bash
+ros2 launch laica_bringup bringup_LAICA_keyboard_teleop.launch
+```
+
+This keyboard launch disables admittance control by default, so keyboard teleop
+is the only motion-command source to `/cmd_vel`. Keyboard teleop publishes to
+`/cmd_vel` by default. It also waits up to 10 s for the Unitree robot IP before
+starting the nodes, so the launch exits cleanly if the robot is off. To send
+keyboard commands to a different topic:
+
+```bash
+ros2 launch laica_bringup bringup_LAICA_keyboard_teleop.launch \
+  teleop_cmd_vel_topic_name:=/your_cmd_vel_topic
+```
+
+To wait longer for the robot to come online:
+
+```bash
+ros2 launch laica_bringup bringup_LAICA_keyboard_teleop.launch \
+  robot_connection_timeout_sec:=30.0
+```
+
 ### Rosbag / Plot Test
 
 Use this for rosbag replay and visual checking:

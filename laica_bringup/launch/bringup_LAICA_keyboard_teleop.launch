@@ -1,0 +1,89 @@
+<launch>
+  <arg name="start_unitree_driver" default="true" />
+  <arg name="start_arduino_sensor_node" default="true" />
+  <arg
+    name="unitree_params_file"
+    default="$(find-pkg-share unitree_ros)/config/params.yaml" />
+  <arg
+    name="arduino_params_file"
+    default="$(find-pkg-share enc_lc)/config/params.yaml" />
+  <arg
+    name="predictor_params_file"
+    default="$(find-pkg-share laica_bringup)/config/velocity_predictor_params.yaml" />
+  <arg name="wifi" default="false" />
+  <arg name="unitree_robot_ip" default="192.168.123.161" />
+  <arg name="robot_connection_timeout_sec" default="10.0" />
+  <arg name="arduino_port" default="/dev/ttyACM0" />
+  <arg name="arduino_baud" default="115200" />
+  <arg name="arduino_publish_rate" default="100.0" />
+  <arg name="load_cell_topic_name" default="/load_cell/data" />
+  <arg name="encoder_topic_name" default="/encoder/data" />
+  <arg
+    name="load_cell_calibration_done_topic_name"
+    default="/load_cell/calibration_done" />
+  <arg name="load_cell_startup_calibration_sec" default="5.0" />
+  <arg name="predicted_cmd_vel_topic_name" default="/laica/predicted_cmd_vel" />
+  <arg name="predictor_publish_rate" default="50.0" />
+  <arg name="sensor_qos_reliability" default="best_effort" />
+  <arg name="load_cell_input_field" default="force_n" />
+  <arg name="admittance_enabled" default="false" />
+  <arg name="require_encoder" default="false" />
+  <arg name="require_load_cell_calibration_done" default="true" />
+  <arg name="force_deadband_n" default="10.0" />
+  <arg name="force_velocity_sign" default="1.0" />
+  <arg name="base_velocity_mps" default="0.0" />
+  <arg name="max_velocity_mps" default="0.40" />
+  <arg name="sensor_timeout_sec" default="0.25" />
+  <arg name="teleop_cmd_vel_topic_name" default="/cmd_vel" />
+  <arg name="teleop_odom_topic_name" default="/odom" />
+  <arg name="teleop_robot_ready_timeout_sec" default="30.0" />
+  <arg name="teleop_connection_check_period_sec" default="5.0" />
+  <arg name="teleop_max_missed_pings" default="3" />
+  <arg name="teleop_repeat_rate_hz" default="20.0" />
+
+  <include file="$(find-pkg-share laica_bringup)/launch/bringup_LAICA_keyboard_teleop.launch.py">
+    <arg name="start_unitree_driver" value="$(var start_unitree_driver)" />
+    <arg name="start_arduino_sensor_node" value="$(var start_arduino_sensor_node)" />
+    <arg name="unitree_params_file" value="$(var unitree_params_file)" />
+    <arg name="arduino_params_file" value="$(var arduino_params_file)" />
+    <arg name="predictor_params_file" value="$(var predictor_params_file)" />
+    <arg name="wifi" value="$(var wifi)" />
+    <arg name="unitree_robot_ip" value="$(var unitree_robot_ip)" />
+    <arg name="robot_connection_timeout_sec" value="$(var robot_connection_timeout_sec)" />
+    <arg name="arduino_port" value="$(var arduino_port)" />
+    <arg name="arduino_baud" value="$(var arduino_baud)" />
+    <arg name="arduino_publish_rate" value="$(var arduino_publish_rate)" />
+    <arg name="load_cell_topic_name" value="$(var load_cell_topic_name)" />
+    <arg name="encoder_topic_name" value="$(var encoder_topic_name)" />
+    <arg
+      name="load_cell_calibration_done_topic_name"
+      value="$(var load_cell_calibration_done_topic_name)" />
+    <arg
+      name="load_cell_startup_calibration_sec"
+      value="$(var load_cell_startup_calibration_sec)" />
+    <arg name="predicted_cmd_vel_topic_name" value="$(var predicted_cmd_vel_topic_name)" />
+    <arg name="predictor_publish_rate" value="$(var predictor_publish_rate)" />
+    <arg name="sensor_qos_reliability" value="$(var sensor_qos_reliability)" />
+    <arg name="load_cell_input_field" value="$(var load_cell_input_field)" />
+    <arg name="admittance_enabled" value="$(var admittance_enabled)" />
+    <arg name="require_encoder" value="$(var require_encoder)" />
+    <arg
+      name="require_load_cell_calibration_done"
+      value="$(var require_load_cell_calibration_done)" />
+    <arg name="force_deadband_n" value="$(var force_deadband_n)" />
+    <arg name="force_velocity_sign" value="$(var force_velocity_sign)" />
+    <arg name="base_velocity_mps" value="$(var base_velocity_mps)" />
+    <arg name="max_velocity_mps" value="$(var max_velocity_mps)" />
+    <arg name="sensor_timeout_sec" value="$(var sensor_timeout_sec)" />
+    <arg name="teleop_cmd_vel_topic_name" value="$(var teleop_cmd_vel_topic_name)" />
+    <arg name="teleop_odom_topic_name" value="$(var teleop_odom_topic_name)" />
+    <arg
+      name="teleop_robot_ready_timeout_sec"
+      value="$(var teleop_robot_ready_timeout_sec)" />
+    <arg
+      name="teleop_connection_check_period_sec"
+      value="$(var teleop_connection_check_period_sec)" />
+    <arg name="teleop_max_missed_pings" value="$(var teleop_max_missed_pings)" />
+    <arg name="teleop_repeat_rate_hz" value="$(var teleop_repeat_rate_hz)" />
+  </include>
+</launch>
