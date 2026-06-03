@@ -48,3 +48,15 @@ laica_velocity_predictor:
     max_accel_mps2: 0.50
     sensor_timeout_sec: 0.25
     robot_odom_timeout_sec: 0.50
+
+    # Compact debug outputs for rosbag analysis.
+    # Topics always published when debug_publish_enabled=true:
+    #   /laica/debug/raw_force
+    #   /laica/debug/zeroed_force
+    #   /laica/debug/filtered_force
+    #   /laica/debug/effective_force
+    #   /laica/debug/admittance_velocity
+    #   /laica/debug/control_dt
+    #   /laica/debug/admittance_accel
+    debug_publish_enabled: true
+    debug_topic_prefix: "/laica/debug"

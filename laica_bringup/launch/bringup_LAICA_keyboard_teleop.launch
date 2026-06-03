@@ -24,6 +24,7 @@
   <arg name="load_cell_startup_calibration_sec" default="5.0" />
   <arg name="predicted_cmd_vel_topic_name" default="/laica/predicted_cmd_vel" />
   <arg name="predictor_publish_rate" default="50.0" />
+  <arg name="predictor_debug_publish_enabled" default="false" />
   <arg name="sensor_qos_reliability" default="best_effort" />
   <arg name="load_cell_input_field" default="force_n" />
   <arg name="admittance_enabled" default="false" />
@@ -40,6 +41,8 @@
   <arg name="teleop_connection_check_period_sec" default="5.0" />
   <arg name="teleop_max_missed_pings" default="3" />
   <arg name="teleop_repeat_rate_hz" default="20.0" />
+  <arg name="teleop_debug_publish_enabled" default="true" />
+  <arg name="teleop_debug_topic_prefix" default="/laica/teleop_debug" />
 
   <include file="$(find-pkg-share laica_bringup)/launch/bringup_LAICA_keyboard_teleop.launch.py">
     <arg name="start_unitree_driver" value="$(var start_unitree_driver)" />
@@ -63,6 +66,9 @@
       value="$(var load_cell_startup_calibration_sec)" />
     <arg name="predicted_cmd_vel_topic_name" value="$(var predicted_cmd_vel_topic_name)" />
     <arg name="predictor_publish_rate" value="$(var predictor_publish_rate)" />
+    <arg
+      name="predictor_debug_publish_enabled"
+      value="$(var predictor_debug_publish_enabled)" />
     <arg name="sensor_qos_reliability" value="$(var sensor_qos_reliability)" />
     <arg name="load_cell_input_field" value="$(var load_cell_input_field)" />
     <arg name="admittance_enabled" value="$(var admittance_enabled)" />
@@ -85,5 +91,9 @@
       value="$(var teleop_connection_check_period_sec)" />
     <arg name="teleop_max_missed_pings" value="$(var teleop_max_missed_pings)" />
     <arg name="teleop_repeat_rate_hz" value="$(var teleop_repeat_rate_hz)" />
+    <arg
+      name="teleop_debug_publish_enabled"
+      value="$(var teleop_debug_publish_enabled)" />
+    <arg name="teleop_debug_topic_prefix" value="$(var teleop_debug_topic_prefix)" />
   </include>
 </launch>

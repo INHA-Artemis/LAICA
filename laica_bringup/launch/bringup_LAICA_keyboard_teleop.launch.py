@@ -82,6 +82,9 @@ def launch_after_robot_ready(context):
     )
     predicted_cmd_vel_topic_name = LaunchConfiguration("predicted_cmd_vel_topic_name")
     predictor_publish_rate = LaunchConfiguration("predictor_publish_rate")
+    predictor_debug_publish_enabled = LaunchConfiguration(
+        "predictor_debug_publish_enabled"
+    )
     sensor_qos_reliability = LaunchConfiguration("sensor_qos_reliability")
     load_cell_input_field = LaunchConfiguration("load_cell_input_field")
     admittance_enabled = LaunchConfiguration("admittance_enabled")
@@ -104,6 +107,8 @@ def launch_after_robot_ready(context):
     )
     teleop_max_missed_pings = LaunchConfiguration("teleop_max_missed_pings")
     teleop_repeat_rate_hz = LaunchConfiguration("teleop_repeat_rate_hz")
+    teleop_debug_publish_enabled = LaunchConfiguration("teleop_debug_publish_enabled")
+    teleop_debug_topic_prefix = LaunchConfiguration("teleop_debug_topic_prefix")
     ros_env = {"RMW_FASTRTPS_USE_SHM": "0", "FASTDDS_BUILTIN_TRANSPORTS": "UDPv4"}
 
     actions = [LogInfo(msg=f"Robot connection available at {robot_ip}.")]
@@ -196,6 +201,9 @@ def launch_after_robot_ready(context):
                         "sensor_timeout_sec": ParameterValue(
                             sensor_timeout_sec, value_type=float
                         ),
+                        "debug_publish_enabled": ParameterValue(
+                            predictor_debug_publish_enabled, value_type=bool
+                        ),
                     },
                 ],
             ),
@@ -222,6 +230,10 @@ def launch_after_robot_ready(context):
                         "repeat_rate_hz": ParameterValue(
                             teleop_repeat_rate_hz, value_type=float
                         ),
+                        "debug_publish_enabled": ParameterValue(
+                            teleop_debug_publish_enabled, value_type=bool
+                        ),
+                        "debug_topic_prefix": teleop_debug_topic_prefix,
                     }
                 ],
             ),
@@ -288,6 +300,7 @@ def generate_launch_description():
                 default_value="/laica/predicted_cmd_vel",
             ),
             DeclareLaunchArgument("predictor_publish_rate", default_value="50.0"),
+            DeclareLaunchArgument("predictor_debug_publish_enabled", default_value="false"),
             DeclareLaunchArgument("sensor_qos_reliability", default_value="best_effort"),
             DeclareLaunchArgument("load_cell_input_field", default_value="force_n"),
             DeclareLaunchArgument("admittance_enabled", default_value="false"),
@@ -310,6 +323,11 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("teleop_max_missed_pings", default_value="3"),
             DeclareLaunchArgument("teleop_repeat_rate_hz", default_value="20.0"),
+            DeclareLaunchArgument("teleop_debug_publish_enabled", default_value="true"),
+            DeclareLaunchArgument(
+                "teleop_debug_topic_prefix",
+                default_value="/laica/teleop_debug",
+            ),
             OpaqueFunction(function=launch_after_robot_ready),
         ]
     )

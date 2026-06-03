@@ -8,6 +8,7 @@
 #include <geometry_msgs/msg/twist.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_msgs/msg/bool.hpp>
+#include <std_msgs/msg/float64.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -221,6 +222,11 @@ public:
     cmd_vel_pub_ = create_publisher<geometry_msgs::msg::Twist>(
         predicted_cmd_vel_topic_name_, rclcpp::QoS(rclcpp::KeepLast(10)).reliable());
 
+    if (debug_publish_enabled_)
+    {
+      createDebugPublishers();
+    }
+
     const auto period =
         std::chrono::duration<double>(1.0 / std::max(publish_rate_, 1.0));
     publish_timer_ = create_wall_timer(
@@ -304,6 +310,8 @@ private:
     declare_parameter<double>("max_accel_mps2", max_accel_mps2_);
     declare_parameter<double>("sensor_timeout_sec", sensor_timeout_sec_);
     declare_parameter<double>("robot_odom_timeout_sec", robot_odom_timeout_sec_);
+    declare_parameter<bool>("debug_publish_enabled", debug_publish_enabled_);
+    declare_parameter<std::string>("debug_topic_prefix", debug_topic_prefix_);
 
     get_parameter("load_cell_topic_name", load_cell_topic_name_);
     get_parameter("encoder_topic_name", encoder_topic_name_);
@@ -336,6 +344,8 @@ private:
     get_parameter("max_accel_mps2", max_accel_mps2_);
     get_parameter("sensor_timeout_sec", sensor_timeout_sec_);
     get_parameter("robot_odom_timeout_sec", robot_odom_timeout_sec_);
+    get_parameter("debug_publish_enabled", debug_publish_enabled_);
+    get_parameter("debug_topic_prefix", debug_topic_prefix_);
 
     if (load_cell_input_field_ != "raw_count" &&
         load_cell_input_field_ != "voltage_mv" &&
@@ -380,6 +390,19 @@ private:
       RCLCPP_WARN(get_logger(),
                   "min_velocity_mps is greater than max_velocity_mps. Swapping.");
       std::swap(min_velocity_mps_, max_velocity_mps_);
+    }
+
+    if (debug_topic_prefix_.empty())
+    {
+      debug_topic_prefix_ = "/laica/debug";
+    }
+    if (debug_topic_prefix_.front() != '/')
+    {
+      debug_topic_prefix_ = "/" + debug_topic_prefix_;
+    }
+    while (debug_topic_prefix_.size() > 1 && debug_topic_prefix_.back() == '/')
+    {
+      debug_topic_prefix_.pop_back();
     }
   }
 
@@ -590,6 +613,78 @@ private:
     cmd_vel_pub_->publish(cmd_vel);
   }
 
+  void createDebugPublishers()
+  {
+    const auto qos = rclcpp::QoS(rclcpp::KeepLast(10)).best_effort();
+    debug_raw_force_pub_ = create_publisher<std_msgs::msg::Float64>(
+        debug_topic_prefix_ + "/raw_force", qos);
+    debug_zeroed_force_pub_ = create_publisher<std_msgs::msg::Float64>(
+        debug_topic_prefix_ + "/zeroed_force", qos);
+    debug_filtered_force_pub_ = create_publisher<std_msgs::msg::Float64>(
+        debug_topic_prefix_ + "/filtered_force", qos);
+    debug_effective_force_pub_ = create_publisher<std_msgs::msg::Float64>(
+        debug_topic_prefix_ + "/effective_force", qos);
+    debug_admittance_velocity_pub_ = create_publisher<std_msgs::msg::Float64>(
+        debug_topic_prefix_ + "/admittance_velocity", qos);
+    debug_control_dt_pub_ = create_publisher<std_msgs::msg::Float64>(
+        debug_topic_prefix_ + "/control_dt", qos);
+    debug_admittance_accel_pub_ = create_publisher<std_msgs::msg::Float64>(
+        debug_topic_prefix_ + "/admittance_accel", qos);
+
+    RCLCPP_INFO(get_logger(), "Publishing admittance debug topics under %s",
+                debug_topic_prefix_.c_str());
+  }
+
+  static void publishDebugValue(
+      const rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr& publisher,
+      double value)
+  {
+    if (!publisher)
+    {
+      return;
+    }
+
+    std_msgs::msg::Float64 msg;
+    msg.data = value;
+    publisher->publish(msg);
+  }
+
+  static void publishDebugValue(
+      const rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr& publisher,
+      bool value)
+  {
+    if (!publisher)
+    {
+      return;
+    }
+
+    std_msgs::msg::Bool msg;
+    msg.data = value;
+    publisher->publish(msg);
+  }
+
+  void publishDebugValues(double raw_force_n,
+                          double zeroed_force_n,
+                          double filtered_force_n,
+                          double effective_force_n,
+                          double admittance_velocity_mps,
+                          double control_dt_sec,
+                          double admittance_accel_mps2)
+  {
+    if (!debug_publish_enabled_)
+    {
+      return;
+    }
+
+    publishDebugValue(debug_raw_force_pub_, raw_force_n);
+    publishDebugValue(debug_zeroed_force_pub_, zeroed_force_n);
+    publishDebugValue(debug_filtered_force_pub_, filtered_force_n);
+    publishDebugValue(debug_effective_force_pub_, effective_force_n);
+    publishDebugValue(debug_admittance_velocity_pub_, admittance_velocity_mps);
+    publishDebugValue(debug_control_dt_pub_, control_dt_sec);
+    publishDebugValue(debug_admittance_accel_pub_, admittance_accel_mps2);
+  }
+
   void updateForceZero(double force_input)
   {
     if (!auto_zero_force_ || zero_complete_)
@@ -638,14 +733,30 @@ private:
     {
       admittance_velocity_mps_ = 0.0;
       filtered_force_n_ = latest_load_cell_input_ - force_zero_offset_;
-      return rateLimitAndClamp(base_velocity_mps_, dt);
+      const double cmd_vx = rateLimitAndClamp(base_velocity_mps_, dt);
+      publishDebugValues(latest_load_cell_input_,
+                         filtered_force_n_,
+                         filtered_force_n_,
+                         applyDeadband(filtered_force_n_),
+                         admittance_velocity_mps_,
+                         dt,
+                         0.0);
+      return cmd_vx;
     }
 
     if (auto_zero_force_ && !zero_complete_)
     {
       admittance_velocity_mps_ = 0.0;
       filtered_force_n_ = 0.0;
-      return rateLimitAndClamp(0.0, dt);
+      const double cmd_vx = rateLimitAndClamp(0.0, dt);
+      publishDebugValues(latest_load_cell_input_,
+                         0.0,
+                         filtered_force_n_,
+                         0.0,
+                         admittance_velocity_mps_,
+                         dt,
+                         0.0);
+      return cmd_vx;
     }
 
     const double force_n = latest_load_cell_input_ - force_zero_offset_;
@@ -661,6 +772,13 @@ private:
 
     const double target_vx = base_velocity_mps_ + admittance_velocity_mps_;
     const double cmd_vx = rateLimitAndClamp(target_vx, dt);
+    publishDebugValues(latest_load_cell_input_,
+                       force_n,
+                       filtered_force_n_,
+                       signed_force_n,
+                       admittance_velocity_mps_,
+                       dt,
+                       accel_mps2);
 
     RCLCPP_INFO_THROTTLE(
         get_logger(), *get_clock(), 1000,
@@ -718,12 +836,12 @@ private:
   {
     const double clamped_target =
         std::max(min_velocity_mps_, std::min(max_velocity_mps_, target_vx));
-
     if (max_accel_mps2_ > 0.0 && has_previous_cmd_)
     {
       const double max_delta = max_accel_mps2_ * dt;
       const double delta = clamped_target - previous_cmd_vx_;
-      previous_cmd_vx_ += std::max(-max_delta, std::min(max_delta, delta));
+      const double limited_delta = std::max(-max_delta, std::min(max_delta, delta));
+      previous_cmd_vx_ += limited_delta;
     }
     else
     {
@@ -759,6 +877,13 @@ private:
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
       load_cell_calibration_done_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr debug_raw_force_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr debug_zeroed_force_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr debug_filtered_force_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr debug_effective_force_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr debug_admittance_velocity_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr debug_control_dt_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr debug_admittance_accel_pub_;
   rclcpp::TimerBase::SharedPtr publish_timer_;
 
   std::string load_cell_topic_name_;
@@ -772,7 +897,9 @@ private:
   std::string load_cell_subscription_mode_ = "serialized_auto";
   std::string load_cell_input_field_ = "force_n";
   std::string serialized_load_cell_layout_;
+  std::string debug_topic_prefix_ = "/laica/debug";
   double publish_rate_ = 50.0;
+  bool debug_publish_enabled_ = true;
 
   double latest_load_cell_input_ = 0.0;
   rclcpp::Time latest_load_cell_time_;
