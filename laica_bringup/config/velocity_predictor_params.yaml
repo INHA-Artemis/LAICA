@@ -4,7 +4,8 @@ laica_velocity_predictor:
     encoder_topic_name: "/encoder/data"
     load_cell_calibration_done_topic_name: "/load_cell/calibration_done"
     switch_topic_name: "/switch/data"
-    predicted_cmd_vel_topic_name: "/laica/predicted_cmd_vel"
+    robot_odom_topic_name: "/odom"
+    predicted_cmd_vel_topic_name: "/cmd_vel"
     publish_rate: 50.0
     sensor_qos_reliability: "best_effort"
     load_cell_subscription_mode: "typed"
@@ -19,14 +20,13 @@ laica_velocity_predictor:
     #   M * d(v_adm)/dt + B * v_adm = F_eff
     #   cmd_vx = base_velocity_mps + v_adm
     #
-    # The output still goes to /laica/predicted_cmd_vel by default. Only remap
-    # predicted_cmd_vel_topic_name to /cmd_vel when testing with a clear safety
-    # procedure and no other /cmd_vel publisher.
+    # The output goes to /cmd_vel so the Unitree driver receives it directly.
+    # Do not run another /cmd_vel publisher at the same time.
     admittance_enabled: true
     require_encoder: false
+    require_robot_odom: true
     require_load_cell_calibration_done: true
     stop_switch_enabled: true
-    stop_switch_field: "switch_1"
 
     # Average the first few seconds and subtract it from the force signal.
     # Keep the loadcell relaxed during this window.
@@ -47,3 +47,4 @@ laica_velocity_predictor:
     max_velocity_mps: 1.0
     max_accel_mps2: 0.50
     sensor_timeout_sec: 0.25
+    robot_odom_timeout_sec: 0.50

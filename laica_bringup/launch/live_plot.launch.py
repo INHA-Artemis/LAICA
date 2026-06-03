@@ -2,6 +2,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -12,7 +13,7 @@ def generate_launch_description():
     force_topic = LaunchConfiguration("force_topic")
     imu_topic = LaunchConfiguration("imu_topic")
     cmd_vel_topic = LaunchConfiguration("cmd_vel_topic")
-    switch_topic = LaunchConfiguration("switch_topic")
+    reference_speed_mps = LaunchConfiguration("reference_speed_mps")
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -42,13 +43,13 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "cmd_vel_topic",
-            default_value="/laica/predicted_cmd_vel",
-            description="Predicted cmd_vel topic to plot.",
+            default_value="/cmd_vel",
+            description="Updated cmd_vel topic to plot.",
         ),
         DeclareLaunchArgument(
-            "switch_topic",
-            default_value="/switch/data",
-            description="Switch marker topic used to highlight action intervals.",
+            "reference_speed_mps",
+            default_value="0.5",
+            description="Reference forward speed shown as a horizontal line.",
         ),
         Node(
             package="laica_bringup",
@@ -62,7 +63,9 @@ def generate_launch_description():
                 "force_topic": force_topic,
                 "imu_topic": imu_topic,
                 "cmd_vel_topic": cmd_vel_topic,
-                "switch_topic": switch_topic,
+                "reference_speed_mps": ParameterValue(
+                    reference_speed_mps, value_type=float
+                ),
             }],
         ),
     ])

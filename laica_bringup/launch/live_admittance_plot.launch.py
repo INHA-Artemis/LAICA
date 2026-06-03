@@ -12,6 +12,7 @@ def generate_launch_description():
     force_topic = LaunchConfiguration("force_topic")
     cmd_vel_topic = LaunchConfiguration("cmd_vel_topic")
     odom_topic = LaunchConfiguration("odom_topic")
+    switch_topic = LaunchConfiguration("switch_topic")
     show_odom = LaunchConfiguration("show_odom")
     predictor_params_file = PathJoinSubstitution([
         FindPackageShare("laica_bringup"),
@@ -37,8 +38,13 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "cmd_vel_topic",
-            default_value="/laica/admittance_cmd_vel",
+            default_value="/cmd_vel",
             description="Admittance/predicted cmd_vel topic.",
+        ),
+        DeclareLaunchArgument(
+            "switch_topic",
+            default_value="/switch/data",
+            description="Switch topic used by the predictor shutdown input.",
         ),
         DeclareLaunchArgument(
             "odom_topic",
@@ -59,22 +65,32 @@ def generate_launch_description():
                 predictor_params_file,
                 {
                     "load_cell_topic_name": force_topic,
+                    "switch_topic_name": switch_topic,
+                    "robot_odom_topic_name": odom_topic,
                     "load_cell_calibration_done_topic_name": "/load_cell/calibration_done",
                     "predicted_cmd_vel_topic_name": cmd_vel_topic,
                     "publish_rate": 50.0,
                     "load_cell_input_field": "force_n",
-                    "sensor_qos_reliability": "reliable",
+                    "sensor_qos_reliability": "best_effort",
                     "load_cell_subscription_mode": "typed",
                     "admittance_enabled": True,
                     "require_encoder": False,
-                    "require_load_cell_calibration_done": False,
+                    "require_robot_odom": True,
+                    "require_load_cell_calibration_done": True,
+                    "stop_switch_enabled": True,
                     "auto_zero_force": True,
                     "zero_force_duration_sec": 3.0,
-                    "force_deadband_n": 10.0,
+                    "force_filter_tau_sec": 0.15,
+                    "force_deadband_n": 5.0,
                     "force_velocity_sign": 1.0,
+                    "admittance_mass": 20.0,
+                    "admittance_damping": 80.0,
                     "base_velocity_mps": 0.5,
-                    "max_velocity_mps": 0.80,
+                    "min_velocity_mps": -1.0,
+                    "max_velocity_mps": 1.0,
+                    "max_accel_mps2": 0.50,
                     "sensor_timeout_sec": 0.25,
+                    "robot_odom_timeout_sec": 0.50,
                 },
             ],
         ),

@@ -1,0 +1,5 @@
+<launch>
+  <include file="$(find-pkg-share laica_bringup)/launch/bringup_LAICA.launch">
+    <arg name="enable_battery_check" value="false" />
+  </include>
+</launch>

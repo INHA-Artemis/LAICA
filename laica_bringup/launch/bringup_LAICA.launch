@@ -14,22 +14,25 @@
 
   <arg name="wifi" default="false" />
   <arg name="unitree_robot_ip" default="192.168.123.161" />
+  <arg name="enable_battery_check" default="true" />
   <arg name="arduino_port" default="/dev/ttyACM0" />
   <arg name="arduino_baud" default="115200" />
   <arg name="arduino_publish_rate" default="100.0" />
   <arg name="load_cell_topic_name" default="/load_cell/data" />
   <arg name="encoder_topic_name" default="/encoder/data" />
   <arg name="switch_topic_name" default="/switch/data" />
+  <arg name="robot_odom_topic_name" default="/odom" />
   <arg
     name="load_cell_calibration_done_topic_name"
     default="/load_cell/calibration_done" />
   <arg name="load_cell_startup_calibration_sec" default="5.0" />
-  <arg name="predicted_cmd_vel_topic_name" default="/laica/predicted_cmd_vel" />
+  <arg name="predicted_cmd_vel_topic_name" default="/cmd_vel" />
   <arg name="predictor_publish_rate" default="50.0" />
   <arg name="sensor_qos_reliability" default="best_effort" />
   <arg name="load_cell_input_field" default="force_n" />
   <arg name="admittance_enabled" default="true" />
   <arg name="require_encoder" default="false" />
+  <arg name="require_robot_odom" default="true" />
   <arg name="require_load_cell_calibration_done" default="true" />
   <arg name="force_deadband_n" default="5.0" />
   <arg name="force_filter_tau_sec" default="0.15" />
@@ -41,8 +44,8 @@
   <arg name="max_velocity_mps" default="1.0" />
   <arg name="max_accel_mps2" default="0.50" />
   <arg name="sensor_timeout_sec" default="0.25" />
+  <arg name="robot_odom_timeout_sec" default="0.50" />
   <arg name="stop_switch_enabled" default="true" />
-  <arg name="stop_switch_field" default="switch_1" />
 
   <include
     file="$(find-pkg-share unitree_ros)/launch/unitree_driver_launch.py"
@@ -50,6 +53,7 @@
     <arg name="params_file" value="$(var unitree_params_file)" />
     <arg name="wifi" value="$(var wifi)" />
     <arg name="robot_ip" value="$(var unitree_robot_ip)" />
+    <arg name="enable_battery_check" value="$(var enable_battery_check)" />
   </include>
 
   <include
@@ -79,6 +83,7 @@
     <param name="load_cell_topic_name" value="$(var load_cell_topic_name)" />
     <param name="encoder_topic_name" value="$(var encoder_topic_name)" />
     <param name="switch_topic_name" value="$(var switch_topic_name)" />
+    <param name="robot_odom_topic_name" value="$(var robot_odom_topic_name)" />
     <param
       name="load_cell_calibration_done_topic_name"
       value="$(var load_cell_calibration_done_topic_name)" />
@@ -88,6 +93,7 @@
     <param name="load_cell_input_field" value="$(var load_cell_input_field)" />
     <param name="admittance_enabled" value="$(var admittance_enabled)" />
     <param name="require_encoder" value="$(var require_encoder)" />
+    <param name="require_robot_odom" value="$(var require_robot_odom)" />
     <param
       name="require_load_cell_calibration_done"
       value="$(var require_load_cell_calibration_done)" />
@@ -101,7 +107,7 @@
     <param name="max_velocity_mps" value="$(var max_velocity_mps)" />
     <param name="max_accel_mps2" value="$(var max_accel_mps2)" />
     <param name="sensor_timeout_sec" value="$(var sensor_timeout_sec)" />
+    <param name="robot_odom_timeout_sec" value="$(var robot_odom_timeout_sec)" />
     <param name="stop_switch_enabled" value="$(var stop_switch_enabled)" />
-    <param name="stop_switch_field" value="$(var stop_switch_field)" />
   </node>
 </launch>

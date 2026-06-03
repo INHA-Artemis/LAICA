@@ -6,6 +6,7 @@
 #include <enc_lc/msg/load_cell_data.hpp>
 #include <enc_lc/msg/switch_data.hpp>
 #include <geometry_msgs/msg/twist.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <std_msgs/msg/bool.hpp>
 
 #include <algorithm>
@@ -199,6 +200,15 @@ public:
                     this, std::placeholders::_1));
     }
 
+    if (require_robot_odom_)
+    {
+      robot_odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
+          robot_odom_topic_name_,
+          rclcpp::QoS(rclcpp::KeepLast(10)).reliable(),
+          std::bind(&LaicaVelocityPredictor::robotOdomCallback,
+                    this, std::placeholders::_1));
+    }
+
     if (stop_switch_enabled_)
     {
       switch_sub_ = create_subscription<enc_lc::msg::SwitchData>(
@@ -236,6 +246,12 @@ public:
       RCLCPP_INFO(get_logger(), "Waiting for loadcell calibration flag on %s",
                   load_cell_calibration_done_topic_name_.c_str());
     }
+    if (require_robot_odom_)
+    {
+      RCLCPP_INFO(get_logger(),
+                  "Waiting for robot odom heartbeat on %s before publishing Twist",
+                  robot_odom_topic_name_.c_str());
+    }
     RCLCPP_INFO(get_logger(), "Using LoadCellData.%s as load-cell input",
                 load_cell_input_field_.c_str());
     RCLCPP_INFO(get_logger(),
@@ -246,8 +262,9 @@ public:
                 base_velocity_mps_, force_deadband_n_);
     if (stop_switch_enabled_)
     {
-      RCLCPP_INFO(get_logger(), "Stop switch enabled on %s.%s",
-                  switch_topic_name_.c_str(), stop_switch_field_.c_str());
+      RCLCPP_INFO(get_logger(),
+                  "Switch 1 shutdown enabled on %s; switch 2 is ignored",
+                  switch_topic_name_.c_str());
     }
   }
 
@@ -259,6 +276,7 @@ private:
     declare_parameter<std::string>("load_cell_calibration_done_topic_name",
                                    load_cell_calibration_done_topic_name_);
     declare_parameter<std::string>("switch_topic_name", switch_topic_name_);
+    declare_parameter<std::string>("robot_odom_topic_name", robot_odom_topic_name_);
     declare_parameter<std::string>("predicted_cmd_vel_topic_name",
                                    predicted_cmd_vel_topic_name_);
     declare_parameter<double>("publish_rate", publish_rate_);
@@ -269,10 +287,10 @@ private:
     declare_parameter<bool>("admittance_enabled", admittance_enabled_);
     declare_parameter<bool>("log_load_cell_input", log_load_cell_input_);
     declare_parameter<bool>("require_encoder", require_encoder_);
+    declare_parameter<bool>("require_robot_odom", require_robot_odom_);
     declare_parameter<bool>("require_load_cell_calibration_done",
                             require_load_cell_calibration_done_);
     declare_parameter<bool>("stop_switch_enabled", stop_switch_enabled_);
-    declare_parameter<std::string>("stop_switch_field", stop_switch_field_);
     declare_parameter<bool>("auto_zero_force", auto_zero_force_);
     declare_parameter<double>("zero_force_duration_sec", zero_force_duration_sec_);
     declare_parameter<double>("force_filter_tau_sec", force_filter_tau_sec_);
@@ -285,12 +303,14 @@ private:
     declare_parameter<double>("max_velocity_mps", max_velocity_mps_);
     declare_parameter<double>("max_accel_mps2", max_accel_mps2_);
     declare_parameter<double>("sensor_timeout_sec", sensor_timeout_sec_);
+    declare_parameter<double>("robot_odom_timeout_sec", robot_odom_timeout_sec_);
 
     get_parameter("load_cell_topic_name", load_cell_topic_name_);
     get_parameter("encoder_topic_name", encoder_topic_name_);
     get_parameter("load_cell_calibration_done_topic_name",
                   load_cell_calibration_done_topic_name_);
     get_parameter("switch_topic_name", switch_topic_name_);
+    get_parameter("robot_odom_topic_name", robot_odom_topic_name_);
     get_parameter("predicted_cmd_vel_topic_name", predicted_cmd_vel_topic_name_);
     get_parameter("publish_rate", publish_rate_);
     get_parameter("sensor_qos_reliability", sensor_qos_reliability_);
@@ -299,10 +319,10 @@ private:
     get_parameter("admittance_enabled", admittance_enabled_);
     get_parameter("log_load_cell_input", log_load_cell_input_);
     get_parameter("require_encoder", require_encoder_);
+    get_parameter("require_robot_odom", require_robot_odom_);
     get_parameter("require_load_cell_calibration_done",
                   require_load_cell_calibration_done_);
     get_parameter("stop_switch_enabled", stop_switch_enabled_);
-    get_parameter("stop_switch_field", stop_switch_field_);
     get_parameter("auto_zero_force", auto_zero_force_);
     get_parameter("zero_force_duration_sec", zero_force_duration_sec_);
     get_parameter("force_filter_tau_sec", force_filter_tau_sec_);
@@ -315,6 +335,7 @@ private:
     get_parameter("max_velocity_mps", max_velocity_mps_);
     get_parameter("max_accel_mps2", max_accel_mps2_);
     get_parameter("sensor_timeout_sec", sensor_timeout_sec_);
+    get_parameter("robot_odom_timeout_sec", robot_odom_timeout_sec_);
 
     if (load_cell_input_field_ != "raw_count" &&
         load_cell_input_field_ != "voltage_mv" &&
@@ -344,14 +365,6 @@ private:
       load_cell_subscription_mode_ = "serialized_auto";
     }
 
-    if (stop_switch_field_ != "switch_1" && stop_switch_field_ != "switch_2")
-    {
-      RCLCPP_WARN(get_logger(),
-                  "Unsupported stop_switch_field '%s'. Falling back to switch_1.",
-                  stop_switch_field_.c_str());
-      stop_switch_field_ = "switch_1";
-    }
-
     publish_rate_ = std::max(publish_rate_, 1.0);
     force_filter_tau_sec_ = std::max(force_filter_tau_sec_, 0.0);
     force_deadband_n_ = std::max(force_deadband_n_, 0.0);
@@ -360,6 +373,7 @@ private:
     admittance_damping_ = std::max(admittance_damping_, 0.0);
     max_accel_mps2_ = std::max(max_accel_mps2_, 0.0);
     sensor_timeout_sec_ = std::max(sensor_timeout_sec_, 0.0);
+    robot_odom_timeout_sec_ = std::max(robot_odom_timeout_sec_, 0.0);
 
     if (min_velocity_mps_ > max_velocity_mps_)
     {
@@ -515,21 +529,25 @@ private:
     }
   }
 
+  void robotOdomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
+  {
+    (void)msg;
+    has_robot_odom_ = true;
+    latest_robot_odom_time_ = now();
+  }
+
   void switchCallback(const enc_lc::msg::SwitchData::SharedPtr msg)
   {
-    const bool pressed =
-        stop_switch_field_ == "switch_2" ? msg->switch_2 : msg->switch_1;
-
-    if (pressed && !stop_switch_pressed_)
+    if (msg->switch_1)
     {
-      RCLCPP_WARN(get_logger(), "Stop switch pressed; stopping admittance output");
+      RCLCPP_WARN(get_logger(),
+                  "Switch 1 pressed; shutting down admittance predictor");
+      if (!robotOdomStale(now()))
+      {
+        publishStopAndReset();
+      }
+      rclcpp::shutdown();
     }
-    else if (!pressed && stop_switch_pressed_)
-    {
-      RCLCPP_INFO(get_logger(), "Stop switch released; admittance output enabled");
-    }
-
-    stop_switch_pressed_ = pressed;
   }
 
   void publishPredictedVelocity()
@@ -542,17 +560,21 @@ private:
     const bool waiting_for_encoder = require_encoder_ && !has_encoder_;
     const bool waiting_for_calibration =
         require_load_cell_calibration_done_ && !load_cell_calibration_done_;
+    if (robotOdomStale(now_time))
+    {
+      RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 5000,
+          "Waiting for robot odom heartbeat before publishing Twist");
+      resetAdmittanceState();
+      previous_cmd_vx_ = 0.0;
+      has_previous_cmd_ = false;
+      return;
+    }
 
     if (load_cell_stale || waiting_for_encoder || waiting_for_calibration)
     {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
                            "Waiting for required sensor data before prediction");
-      publishStopAndReset();
-      return;
-    }
-
-    if (stop_switch_enabled_ && stop_switch_pressed_)
-    {
       publishStopAndReset();
       return;
     }
@@ -598,6 +620,14 @@ private:
                   "Predictor force zeroing complete: offset=%.6f from %zu samples",
                   force_zero_offset_, zero_samples_);
     }
+  }
+
+  bool robotOdomStale(const rclcpp::Time& now_time) const
+  {
+    return require_robot_odom_ &&
+           (!has_robot_odom_ ||
+            (robot_odom_timeout_sec_ > 0.0 &&
+             (now_time - latest_robot_odom_time_).seconds() > robot_odom_timeout_sec_));
   }
 
   double computeAdmittanceVelocity(const rclcpp::Time& now_time)
@@ -724,6 +754,7 @@ private:
   rclcpp::Subscription<enc_lc::msg::LoadCellData>::SharedPtr load_cell_sub_;
   rclcpp::GenericSubscription::SharedPtr load_cell_generic_sub_;
   rclcpp::Subscription<enc_lc::msg::EncoderData>::SharedPtr encoder_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr robot_odom_sub_;
   rclcpp::Subscription<enc_lc::msg::SwitchData>::SharedPtr switch_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr
       load_cell_calibration_done_sub_;
@@ -733,6 +764,7 @@ private:
   std::string load_cell_topic_name_;
   std::string encoder_topic_name_;
   std::string switch_topic_name_ = "/switch/data";
+  std::string robot_odom_topic_name_ = "/odom";
   std::string load_cell_calibration_done_topic_name_ =
       "/load_cell/calibration_done";
   std::string predicted_cmd_vel_topic_name_;
@@ -746,15 +778,16 @@ private:
   rclcpp::Time latest_load_cell_time_;
   bool has_load_cell_ = false;
   bool has_encoder_ = false;
+  bool has_robot_odom_ = false;
+  rclcpp::Time latest_robot_odom_time_;
 
   bool admittance_enabled_ = true;
   bool log_load_cell_input_ = false;
   bool require_encoder_ = false;
+  bool require_robot_odom_ = true;
   bool require_load_cell_calibration_done_ = false;
   bool load_cell_calibration_done_ = false;
   bool stop_switch_enabled_ = true;
-  bool stop_switch_pressed_ = false;
-  std::string stop_switch_field_ = "switch_1";
   bool auto_zero_force_ = true;
   bool zero_started_ = false;
   bool zero_complete_ = false;
@@ -774,6 +807,7 @@ private:
   double max_velocity_mps_ = 0.40;
   double max_accel_mps2_ = 0.50;
   double sensor_timeout_sec_ = 0.25;
+  double robot_odom_timeout_sec_ = 0.50;
 
   double filtered_force_n_ = 0.0;
   bool has_filtered_force_ = false;

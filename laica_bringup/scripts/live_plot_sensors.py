@@ -7,6 +7,7 @@ import rclpy
 from rclpy.node import Node
 
 from enc_lc.msg import EncoderData, LoadCellData, SwitchData
+from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Imu
 
 
@@ -19,12 +20,17 @@ class LiveSensorPlot(Node):
         self.declare_parameter("encoder_topic", "/encoder/data")
         self.declare_parameter("force_topic", "/load_cell/data")
         self.declare_parameter("imu_topic", "/imu")
+        self.declare_parameter("cmd_vel_topic", "/cmd_vel")
+        self.declare_parameter("reference_speed_mps", 0.5)
         self.declare_parameter("switch_topic", "/switch/data")
         self.declare_parameter("highlight_color", "tab:orange")
         self.declare_parameter("highlight_alpha", 0.18)
 
         self.window_sec = float(self.get_parameter("window_sec").value)
         self.update_hz = float(self.get_parameter("update_hz").value)
+        self.reference_speed_mps = float(
+            self.get_parameter("reference_speed_mps").value
+        )
         self.highlight_color = self.get_parameter("highlight_color").value
         self.highlight_alpha = float(self.get_parameter("highlight_alpha").value)
 
@@ -45,8 +51,11 @@ class LiveSensorPlot(Node):
             "linear_acceleration.x": deque(),
             "linear_acceleration.z": deque(),
         }
+        self.cmd_vel = {
+            "cmd_vel.linear.x": deque(),
+        }
 
-        self.fig, self.axes = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
+        self.fig, self.axes = plt.subplots(4, 1, figsize=(12, 10), sharex=True)
         self.fig.canvas.manager.set_window_title("LAICA Live Sensors")
         self.lines = {}
         self._setup_axes()
@@ -70,6 +79,12 @@ class LiveSensorPlot(Node):
             10,
         )
         self.create_subscription(
+            Twist,
+            self.get_parameter("cmd_vel_topic").value,
+            self.cmd_vel_callback,
+            10,
+        )
+        self.create_subscription(
             SwitchData,
             self.get_parameter("switch_topic").value,
             self.switch_callback,
@@ -85,6 +100,7 @@ class LiveSensorPlot(Node):
             ("Encoder", self.axes[0], self.encoder),
             ("Force", self.axes[1], self.force),
             ("IMU", self.axes[2], self.imu),
+            ("Velocity command", self.axes[3], self.cmd_vel),
         ]
 
         for title, ax, series in groups:
@@ -95,6 +111,19 @@ class LiveSensorPlot(Node):
                 self.lines[field] = line
             ax.legend(loc="best")
 
+        reference_line, = self.axes[3].plot(
+            [],
+            [],
+            label="reference_vx",
+            linewidth=1.5,
+            linestyle="--",
+            color="tab:gray",
+        )
+        self.lines["reference_vx"] = reference_line
+        self.axes[3].legend(loc="best")
+
+        self.axes[1].set_ylabel("N")
+        self.axes[3].set_ylabel("m/s")
         self.axes[-1].set_xlabel("time [s]")
         self.fig.tight_layout()
         plt.ion()
@@ -139,6 +168,10 @@ class LiveSensorPlot(Node):
         self.append_value(self.imu, "linear_acceleration.x", time_value, msg.linear_acceleration.x)
         self.append_value(self.imu, "linear_acceleration.z", time_value, msg.linear_acceleration.z)
 
+    def cmd_vel_callback(self, msg):
+        time_value = self.message_time(msg)
+        self.append_value(self.cmd_vel, "cmd_vel.linear.x", time_value, msg.linear.x)
+
     def switch_callback(self, msg):
         time_value = self.message_time(msg)
         pressed = bool(msg.switch_1) or bool(msg.switch_2)
@@ -163,15 +196,22 @@ class LiveSensorPlot(Node):
         now = self.current_time()
         min_time = max(0.0, now - self.window_sec)
 
-        for series in (self.encoder, self.force, self.imu):
+        for series in (self.encoder, self.force, self.imu, self.cmd_vel):
             self.prune_series(series, min_time)
         self.prune_intervals(min_time)
 
-        for series in (self.encoder, self.force, self.imu):
+        plot_end = max(self.window_sec, now)
+
+        for series in (self.encoder, self.force, self.imu, self.cmd_vel):
             for field, values in series.items():
                 times = [item[0] for item in values]
                 y_values = [item[1] for item in values]
                 self.lines[field].set_data(times, y_values)
+
+        self.lines["reference_vx"].set_data(
+            [min_time, plot_end],
+            [self.reference_speed_mps, self.reference_speed_mps],
+        )
 
         for ax in self.axes:
             for patch in list(ax.patches):
@@ -196,7 +236,7 @@ class LiveSensorPlot(Node):
                     linewidth=0,
                 )
 
-            ax.set_xlim(min_time, max(self.window_sec, now))
+            ax.set_xlim(min_time, plot_end)
             ax.relim()
             ax.autoscale_view(scalex=False, scaley=True)
 

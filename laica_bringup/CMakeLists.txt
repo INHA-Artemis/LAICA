@@ -12,6 +12,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(unitree_ros REQUIRED)
 find_package(enc_lc REQUIRED)
@@ -23,6 +24,7 @@ add_executable(laica_velocity_predictor
 ament_target_dependencies(laica_velocity_predictor
   rclcpp
   geometry_msgs
+  nav_msgs
   std_msgs
   unitree_ros
   enc_lc
@@ -41,8 +43,6 @@ install(PROGRAMS
 
 install(PROGRAMS
   scripts/plot_rosbag_sensors.py
-  scripts/replot_all_rosbags_combined.sh
-  scripts/simulate_force_admittance.py
   DESTINATION share/${PROJECT_NAME}/scripts
 )
 

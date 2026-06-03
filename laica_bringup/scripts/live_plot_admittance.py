@@ -20,7 +20,7 @@ class LiveAdmittancePlot(Node):
         self.declare_parameter("window_sec", 20.0)
         self.declare_parameter("update_hz", 10.0)
         self.declare_parameter("force_topic", "/load_cell/data")
-        self.declare_parameter("cmd_vel_topic", "/laica/predicted_cmd_vel")
+        self.declare_parameter("cmd_vel_topic", "/cmd_vel")
         self.declare_parameter("odom_topic", "/odom")
         self.declare_parameter("show_odom", True)
         self.declare_parameter("time_source", "arrival")
@@ -41,7 +41,6 @@ class LiveAdmittancePlot(Node):
         self.series = {
             "force_n": deque(),
             "cmd_vx": deque(),
-            "cmd_wz": deque(),
             "odom_vx": deque(),
             "odom_speed": deque(),
         }
@@ -84,7 +83,7 @@ class LiveAdmittancePlot(Node):
     def _setup_axes(self):
         axis_specs = [
             ("Force input", self.axes[0], ["force_n"]),
-            ("Admittance output", self.axes[1], ["cmd_vx", "cmd_wz"]),
+            ("Admittance output", self.axes[1], ["cmd_vx"]),
             ("Robot odom feedback", self.axes[2], ["odom_vx", "odom_speed"]),
         ]
 
@@ -169,7 +168,6 @@ class LiveAdmittancePlot(Node):
     def cmd_vel_callback(self, msg):
         time_value = self.message_time(msg)
         self.append("cmd_vx", time_value, msg.linear.x)
-        self.append("cmd_wz", time_value, msg.angular.z)
 
     def odom_callback(self, msg):
         if not self.show_odom:
