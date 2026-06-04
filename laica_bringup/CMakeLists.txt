@@ -44,6 +44,7 @@ install(PROGRAMS
 
 install(PROGRAMS
   scripts/plot_rosbag_sensors.py
+  scripts/analyze_force_cmd_metrics.py
   DESTINATION share/${PROJECT_NAME}/scripts
 )
 

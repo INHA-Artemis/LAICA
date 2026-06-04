@@ -42,9 +42,9 @@ laica_velocity_predictor:
     # Admittance parameters and safety limits.
     admittance_mass: 20.0
     admittance_damping: 80.0
-    base_velocity_mps: 0.5
-    min_velocity_mps: -1.0
-    max_velocity_mps: 1.0
+    base_velocity_mps: 0.6
+    min_velocity_mps: -2.0
+    max_velocity_mps: 2.0
     max_accel_mps2: 0.50
     sensor_timeout_sec: 0.25
     robot_odom_timeout_sec: 0.50

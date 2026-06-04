@@ -8,9 +8,11 @@ import time
 import tty
 
 import rclpy
+from enc_lc.msg import LoadCellData
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
+from std_msgs.msg import Float64
 
 
 HELP_TEXT = """
@@ -33,8 +35,11 @@ class KeyboardForwardStop(Node):
         self.declare_parameter("enable_runtime_ping_check", False)
         self.declare_parameter("max_missed_pings", 3)
         self.declare_parameter("repeat_rate_hz", 20.0)
-        self.declare_parameter("target_velocity_mps", 0.4)
+        self.declare_parameter("target_velocity_mps", 0.5)
         self.declare_parameter("max_accel_mps2", 0.1)
+        self.declare_parameter("load_cell_topic_name", "/load_cell/data")
+        self.declare_parameter("debug_publish_enabled", True)
+        self.declare_parameter("debug_topic_prefix", "/laica/teleop_debug")
 
         self.cmd_vel_topic_name = self.get_parameter("cmd_vel_topic_name").value
         odom_topic_name = self.get_parameter("odom_topic_name").value
@@ -56,10 +61,21 @@ class KeyboardForwardStop(Node):
         self.max_accel_mps2 = max(
             0.0, float(self.get_parameter("max_accel_mps2").value)
         )
+        load_cell_topic_name = self.get_parameter("load_cell_topic_name").value
+        self.debug_publish_enabled = bool(
+            self.get_parameter("debug_publish_enabled").value
+        )
+        self.debug_topic_prefix = self.normalize_topic_prefix(
+            self.get_parameter("debug_topic_prefix").value
+        )
 
         self.publisher = None
+        self.debug_publishers = {}
         self.odom_sub = self.create_subscription(
             Odometry, odom_topic_name, self.odom_callback, 10
+        )
+        self.load_cell_sub = self.create_subscription(
+            LoadCellData, load_cell_topic_name, self.load_cell_callback, 10
         )
         self.target_command_velocity_mps = 0.0
         self.current_command_velocity_mps = 0.0
@@ -70,13 +86,72 @@ class KeyboardForwardStop(Node):
         self.missed_ping_count = 0
         self.was_ready = False
         self.repeat_timer = None
+        self.force_zero_started = False
+        self.force_zero_sum = 0.0
+        self.force_zero_samples = 0
+        self.force_zero_offset = 0.0
+        self.filtered_force = 0.0
+        self.has_filtered_force = False
+        if self.debug_publish_enabled:
+            self.create_debug_publishers()
 
         self.get_logger().info(
             f"Waiting for robot readiness: odom={odom_topic_name}, ip={self.robot_ip}"
         )
+        self.get_logger().info(
+            f"Subscribing to load-cell force for keyboard logs: {load_cell_topic_name}"
+        )
+
+    def normalize_topic_prefix(self, prefix):
+        prefix = str(prefix or "/laica/teleop_debug")
+        if not prefix.startswith("/"):
+            prefix = "/" + prefix
+        return prefix.rstrip("/") or "/"
 
     def odom_callback(self, _msg):
         self.last_odom_time = time.monotonic()
+
+    def create_debug_publishers(self):
+        for topic in ["raw_force", "zeroed_force", "filtered_force"]:
+            self.debug_publishers[topic] = self.create_publisher(
+                Float64, f"{self.debug_topic_prefix}/{topic}", 10
+            )
+        self.get_logger().info(
+            f"Publishing keyboard force debug topics under {self.debug_topic_prefix}"
+        )
+
+    def publish_debug_float(self, topic, value):
+        publisher = self.debug_publishers.get(topic)
+        if publisher is None:
+            return
+        msg = Float64()
+        msg.data = float(value)
+        publisher.publish(msg)
+
+    def load_cell_callback(self, msg):
+        force = float(msg.force_n)
+        if not self.force_zero_started:
+            self.force_zero_started = True
+            self.force_zero_sum = 0.0
+            self.force_zero_samples = 0
+
+        if self.force_zero_samples < 100:
+            self.force_zero_sum += force
+            self.force_zero_samples += 1
+            self.force_zero_offset = self.force_zero_sum / self.force_zero_samples
+
+        zeroed_force = force - self.force_zero_offset
+        alpha = 0.12
+        if not self.has_filtered_force:
+            self.filtered_force = zeroed_force
+            self.has_filtered_force = True
+        else:
+            self.filtered_force += alpha * (zeroed_force - self.filtered_force)
+
+        if self.debug_publish_enabled:
+            self.publish_debug_float("raw_force", force)
+            self.publish_debug_float("zeroed_force", zeroed_force)
+            self.publish_debug_float("filtered_force", self.filtered_force)
 
     def handle_key(self, key):
         if key == "w":

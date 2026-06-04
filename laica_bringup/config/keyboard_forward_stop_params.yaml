@@ -8,5 +8,8 @@ keyboard_forward_stop:
     enable_runtime_ping_check: false
     max_missed_pings: 3
     repeat_rate_hz: 20.0
-    target_velocity_mps: 0.4
+    target_velocity_mps: 0.6
     max_accel_mps2: 0.1
+    load_cell_topic_name: "/load_cell/data"
+    debug_publish_enabled: true
+    debug_topic_prefix: "/laica/teleop_debug"

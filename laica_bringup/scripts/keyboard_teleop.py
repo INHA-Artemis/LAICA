@@ -9,6 +9,7 @@ import time
 import tty
 
 import rclpy
+from enc_lc.msg import LoadCellData
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
@@ -38,8 +39,9 @@ class KeyboardTeleop(Node):
         self.declare_parameter("repeat_rate_hz", 20.0)
         self.declare_parameter("linear_step", 0.05)
         self.declare_parameter("angular_step", 0.1)
-        self.declare_parameter("max_linear", 0.4)
+        self.declare_parameter("max_linear", 0.5)
         self.declare_parameter("max_angular", 1.0)
+        self.declare_parameter("load_cell_topic_name", "/load_cell/data")
         self.declare_parameter("debug_publish_enabled", True)
         self.declare_parameter("debug_topic_prefix", "/laica/teleop_debug")
 
@@ -61,6 +63,7 @@ class KeyboardTeleop(Node):
         self.angular_step = float(self.get_parameter("angular_step").value)
         self.max_linear = float(self.get_parameter("max_linear").value)
         self.max_angular = float(self.get_parameter("max_angular").value)
+        load_cell_topic_name = self.get_parameter("load_cell_topic_name").value
         self.debug_publish_enabled = bool(
             self.get_parameter("debug_publish_enabled").value
         )
@@ -72,6 +75,9 @@ class KeyboardTeleop(Node):
         self.debug_publishers = {}
         self.odom_sub = self.create_subscription(
             Odometry, odom_topic_name, self.odom_callback, 10
+        )
+        self.load_cell_sub = self.create_subscription(
+            LoadCellData, load_cell_topic_name, self.load_cell_callback, 10
         )
         self.linear_x = 0.0
         self.angular_z = 0.0
@@ -87,10 +93,19 @@ class KeyboardTeleop(Node):
         self.previous_debug_cmd_accel = 0.0
         self.previous_debug_angular_accel = 0.0
         self.has_previous_debug_accel = False
+        self.force_zero_started = False
+        self.force_zero_sum = 0.0
+        self.force_zero_samples = 0
+        self.force_zero_offset = 0.0
+        self.filtered_force = 0.0
+        self.has_filtered_force = False
         if self.debug_publish_enabled:
             self.create_debug_publishers()
         self.get_logger().info(
             f"Waiting for robot readiness: odom={odom_topic_name}, ip={self.robot_ip}"
+        )
+        self.get_logger().info(
+            f"Subscribing to load-cell force for keyboard logs: {load_cell_topic_name}"
         )
 
     def normalize_topic_prefix(self, prefix):
@@ -111,6 +126,9 @@ class KeyboardTeleop(Node):
             "cmd_jerk",
             "angular_accel",
             "angular_jerk",
+            "raw_force",
+            "zeroed_force",
+            "filtered_force",
         ]:
             self.debug_publishers[topic] = self.create_publisher(
                 Float64, f"{self.debug_topic_prefix}/{topic}", 10
@@ -164,6 +182,31 @@ class KeyboardTeleop(Node):
         self.previous_debug_cmd_accel = cmd_accel
         self.previous_debug_angular_accel = angular_accel
         self.has_previous_debug_accel = True
+
+    def load_cell_callback(self, msg):
+        force = float(msg.force_n)
+        if not self.force_zero_started:
+            self.force_zero_started = True
+            self.force_zero_sum = 0.0
+            self.force_zero_samples = 0
+
+        if self.force_zero_samples < 100:
+            self.force_zero_sum += force
+            self.force_zero_samples += 1
+            self.force_zero_offset = self.force_zero_sum / self.force_zero_samples
+
+        zeroed_force = force - self.force_zero_offset
+        alpha = 0.12
+        if not self.has_filtered_force:
+            self.filtered_force = zeroed_force
+            self.has_filtered_force = True
+        else:
+            self.filtered_force += alpha * (zeroed_force - self.filtered_force)
+
+        if self.debug_publish_enabled:
+            self.publish_debug_float("raw_force", force)
+            self.publish_debug_float("zeroed_force", zeroed_force)
+            self.publish_debug_float("filtered_force", self.filtered_force)
 
     def clamp(self, value, limit):
         return max(-limit, min(limit, value))
