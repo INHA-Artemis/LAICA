@@ -1,0 +1,12 @@
+keyboard_forward_stop:
+  ros__parameters:
+    cmd_vel_topic_name: "/cmd_vel"
+    odom_topic_name: "/odom"
+    robot_ip: "192.168.123.161"
+    robot_ready_timeout_sec: 30.0
+    connection_check_period_sec: 5.0
+    enable_runtime_ping_check: false
+    max_missed_pings: 3
+    repeat_rate_hz: 20.0
+    target_velocity_mps: 0.4
+    max_accel_mps2: 0.1

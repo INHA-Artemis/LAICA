@@ -63,24 +63,27 @@ ros2 launch laica_bringup bringup_LAICA.launch \
 To drive manually with keyboard teleop:
 
 ```bash
-ros2 launch laica_bringup bringup_LAICA_keyboard_teleop.launch
+ros2 launch laica_bringup bringup_LAICA_keyboard_teleop.launch.py
 ```
 
-This keyboard launch disables admittance control by default, so keyboard teleop
-is the only motion-command source to `/cmd_vel`. Keyboard teleop publishes to
-`/cmd_vel` by default. It also waits up to 10 s for the Unitree robot IP before
-starting the nodes, so the launch exits cleanly if the robot is off. To send
-keyboard commands to a different topic:
+This keyboard launch disables admittance control by default, so the simple
+forward/stop keyboard node is the only motion-command source to `/cmd_vel`.
+It publishes to `/cmd_vel` by default. It also waits up to 10 s for the Unitree
+robot IP before starting the nodes, so the launch exits cleanly if the robot is
+off. Keyboard defaults live in
+`src/laica_bringup/config/keyboard_forward_stop_params.yaml`.
+
+To send keyboard commands to a different topic:
 
 ```bash
-ros2 launch laica_bringup bringup_LAICA_keyboard_teleop.launch \
-  teleop_cmd_vel_topic_name:=/your_cmd_vel_topic
+ros2 launch laica_bringup bringup_LAICA_keyboard_teleop.launch.py \
+  keyboard_cmd_vel_topic_name:=/your_cmd_vel_topic
 ```
 
 To wait longer for the robot to come online:
 
 ```bash
-ros2 launch laica_bringup bringup_LAICA_keyboard_teleop.launch \
+ros2 launch laica_bringup bringup_LAICA_keyboard_teleop.launch.py \
   robot_connection_timeout_sec:=30.0
 ```
 
