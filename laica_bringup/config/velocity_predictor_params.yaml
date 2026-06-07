@@ -40,8 +40,8 @@ laica_velocity_predictor:
     force_velocity_sign: 1.0
 
     # Admittance parameters and safety limits.
-    admittance_mass: 20.0
-    admittance_damping: 80.0
+    admittance_mass: 15.0
+    admittance_damping: 50.0
     base_velocity_mps: 0.5
     min_velocity_mps: 0.3
     max_velocity_mps: 1.0
