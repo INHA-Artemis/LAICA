@@ -574,6 +574,76 @@ contribution is the ability to measure and tune force-based interaction
 according to each user's comfort profile.
 ```
 
+### Example User-Specific ASI Weights
+
+To illustrate why each preferred parameter can be explained by a different
+comfort profile, an example user-specific objective ASI was fitted using:
+
+```text
+ASI_user =
+  w20   * normalized time(|force| > 20 N)
++ w30   * normalized time(|force| > 30 N)
++ wvar  * normalized force variance
++ wjerk * normalized odom jerk p95
+```
+
+Lower score is better. Metrics were min-max normalized within each user's tested
+candidate set.
+
+The fitted weights below are not universal. They are explanatory weights that
+make each user's reported preferred setting rank best or near-best according to
+that user's apparent comfort profile.
+
+| User | Preferred setting | w20 | w30 | wvar | wjerk | Main fitted preference factor |
+|---|---|---:|---:|---:|---:|---|
+| JH | `B=80` | 0.00 | 0.00 | 0.37 | 0.63 | jerk and interaction stability |
+| ANDY | `B=60` | 0.00 | 0.93 | 0.00 | 0.07 | avoiding severe force peaks, with some jerk sensitivity |
+| MH | `B=50, M=15` | 0.00 | 0.00 | 0.50 | 0.50 | low variance and low jerk |
+
+The fitted ASI ranking is:
+
+| User | Candidate | `>20 N` | `>30 N` | Variance | Odom jerk | Fitted ASI | Rank |
+|---|---|---:|---:|---:|---:|---:|---:|
+| JH | `B80` | 14.26% | 6.68% | 169.91 | 229.40 | 0.10 | 1 |
+| JH | `B60` | 15.40% | 5.82% | 212.35 | 247.81 | 0.62 | 2 |
+| JH | `default` | 11.88% | 4.51% | 153.77 | 274.91 | 0.63 | 3 |
+| ANDY | `B60` | 13.74% | 1.91% | 168.56 | 135.59 | 0.01 | 1 |
+| ANDY | `B70` | 9.79% | 2.84% | 175.23 | 126.57 | 0.07 | 2 |
+| ANDY | `default` | 5.74% | 1.83% | 138.51 | 210.80 | 0.07 | 3 |
+| ANDY | `B90` | 23.54% | 15.74% | 408.75 | 180.32 | 0.97 | 4 |
+| MH | `B50 M15` | 21.51% | 10.58% | 201.40 | 140.75 | 0.00 | 1 |
+| MH | `B60` | 21.10% | 9.46% | 218.26 | 151.19 | 0.17 | 2 |
+| MH | `B80` | 22.99% | 10.56% | 274.45 | 234.70 | 1.00 | 3 |
+
+This fitted table highlights an important methodological point:
+
+```text
+Objective ASI can be adjusted to reflect each user's observed preference, but
+the resulting weights should not be treated as final without subjective rating
+data.
+```
+
+For example, ANDY's fitted objective weights strongly emphasize `|force| > 30 N`
+because this is what makes `B60` rank above `B70` and `default` using only the
+available objective metrics. However, the earlier qualitative interpretation
+suggested that ANDY may have also preferred the response feel of `B60`. Since
+response feel was not directly recorded as a numerical signal, the objective
+fit compresses that preference into the available metrics.
+
+Therefore, a better future ASI should include a subjective response term:
+
+```text
+ASI_total =
+  w20   * T20
++ w30   * T30
++ wvar  * ForceVariance
++ wjerk * OdomJerk
++ wsubj * SubjectiveResponsePenalty
+```
+
+This would allow the model to explain preference without forcing all preference
+differences into force and jerk metrics only.
+
 ## Smoothing Filter vs Force-Based Control
 
 A velocity smoothing filter and force-based admittance control solve different
