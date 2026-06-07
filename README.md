@@ -325,3 +325,107 @@ ros2 topic echo /load_cell/data
 ros2 topic echo /cmd_vel
 ros2 topic echo /odom
 ```
+
+## Experiment Summary
+
+Detailed rosbag analysis results are documented in:
+
+```text
+/home/artemis/Documents/LAICA_ws/rosbag_csv_exports/README.md
+```
+
+Raw experiment bags:
+
+```text
+/home/artemis/Documents/rosbags/06_03
+/home/artemis/Documents/rosbags/06_04
+/home/artemis/Documents/rosbags/06_07
+```
+
+### Main Finding
+
+LAICA admittance control should be described as a **user-adaptable
+force-to-velocity interface**, not as a one-size-fits-all controller.
+
+Normal-scene results show that admittance reduced sustained force burden:
+
+```text
+JH scene 1-5:
+  mean |force|:       10.53 N admittance vs 15.97 N keyboard
+  |force| > 20 N:     13.52% admittance vs 30.17% keyboard
+  force variance:     158.18 admittance vs 249.74 keyboard
+
+ANDY scene 1-5:
+  mean |force|:        8.21 N admittance vs 11.16 N keyboard
+  |force| > 20 N:      7.44% admittance vs 15.89% keyboard
+  force variance:     113.78 admittance vs 171.46 keyboard
+```
+
+The 06_04 JH repeated trials also showed lower force variance under admittance:
+
+```text
+slow trials:  95.5 admittance vs 260.6 keyboard
+fast trials: 453.0 admittance vs 958.2 keyboard
+```
+
+### Odom Jerk Interpretation
+
+In the 06_07 normal-scene mode averages, odom jerk p95 was close between
+admittance and keyboard:
+
+```text
+JH:   213.24 admittance vs 210.08 keyboard
+ANDY: 207.79 admittance vs 213.89 keyboard
+```
+
+This means admittance did not create a large average jerk penalty in normal
+scenes.
+
+However, jerk was still important in the preferred-parameter experiments:
+
+```text
+JH preferred B80:
+  B80 had lower jerk than default, while force stayed reasonable.
+
+ANDY preferred B60:
+  B60 had much lower jerk than default, even though default minimized force.
+
+MH preferred B50 M15:
+  B50 M15 had the lowest jerk and lowest force variance among MH admittance
+  settings.
+```
+
+Correct interpretation:
+
+```text
+Average keyboard-vs-admittance jerk was similar in normal scenes, but jerk was a
+key factor for explaining individual parameter preference.
+```
+
+### Preferred Parameters
+
+Additional 06_07 trials showed different user preferences:
+
+```text
+JH preferred:   B = 80
+ANDY preferred: B = 60
+MH preferred:   B = 50, M = 15
+```
+
+The preference difference was not explained by force minimization alone.
+
+```text
+JH:   likely valued stable, less-jerky motion with moderate force burden.
+ANDY: likely valued smoother response feel; B60 lowered jerk substantially.
+MH:   likely valued low jerk and low interaction variability.
+```
+
+Therefore:
+
+```text
+comfort = force burden + force variance + motion smoothness + response feeling
+          + subjective preference
+```
+
+Future experiments should include subjective ratings after each trial, because
+objective force metrics alone do not fully explain preference.

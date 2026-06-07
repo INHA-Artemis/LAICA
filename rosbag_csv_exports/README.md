@@ -271,10 +271,14 @@ From `06_07_reanalysis/06_07_JH_scene1_5_mode_summary.csv`:
 Interpretation:
 
 ```text
-For JH normal scenes, admittance clearly reduced force burden. Odom jerk was
-similar to keyboard, so comfort improvement did not come with a large smoothness
-penalty.
+For JH normal scenes, admittance clearly reduced force burden. The average odom
+jerk was close to keyboard, so comfort improvement did not come with a large
+average smoothness penalty.
 ```
+
+This average comparison should not be confused with the preferred-parameter
+result. In the parameter-tuning trials, jerk differences became important for
+explaining why JH preferred `B=80`.
 
 Scene-level note:
 
@@ -300,9 +304,15 @@ From `06_07_reanalysis/06_07_ANDY_scene1_5_mode_summary.csv`:
 Interpretation:
 
 ```text
-For ANDY normal scenes, admittance also reduced force burden and maintained
-similar motion smoothness.
+For ANDY normal scenes, admittance also reduced force burden. The average odom
+jerk was close to keyboard, so the normal-scene comparison does not show a large
+smoothness penalty.
 ```
+
+However, in the preferred-parameter trials, ANDY's preferred `B=60` had much
+lower jerk than the default admittance setting. Therefore, jerk still matters
+for explaining individual preference even if the mode-level average looks
+similar.
 
 Scene-level note:
 
@@ -360,6 +370,33 @@ metric. Comfort appears to combine force burden, motion smoothness, response
 feeling, and subjective preference.
 ```
 
+This means that the preferred parameter should be interpreted as a
+multi-objective comfort choice, not as the winner of one metric.
+
+The factors used to interpret preference are:
+
+```text
+1. Force burden:
+   mean |force|, p95 |force|, time(|force| > 20 N), time(|force| > 30 N)
+
+2. Interaction stability:
+   force variance
+
+3. Motion smoothness:
+   odom jerk p95
+
+4. Response feeling:
+   inferred from the trade-off between force reduction and smoothness
+```
+
+Important caution:
+
+```text
+The rosbags provide objective evidence, but they do not fully explain subjective
+preference. Therefore, the preference explanation below should be read as a
+data-grounded interpretation, not as a final psychological conclusion.
+```
+
 ### JH Preferred Parameter
 
 JH preferred `B=80`.
@@ -381,6 +418,30 @@ with default, even though default has slightly better force metrics.
 
 This suggests JH may prioritize stable and less jerky motion over absolute
 minimum force.
+
+Detailed preference factor:
+
+```text
+Main factor for JH: motion smoothness / stability
+Secondary factor: avoiding high force without making the robot feel too reactive
+```
+
+Why:
+
+- Compared with `B60`, `B80` has lower mean force, lower `|force| > 20 N`, lower
+  force variance, and lower odom jerk.
+- Compared with `default`, `B80` has slightly worse force metrics but much lower
+  odom jerk.
+- Therefore, JH's preference is best explained by a balance between force burden
+  and smoother robot motion.
+
+In other words:
+
+```text
+JH did not appear to choose the most force-minimizing setting. JH appeared to
+prefer the setting that made the robot motion feel more stable while still
+keeping force burden reasonably low.
+```
 
 ### ANDY Preferred Parameter
 
@@ -405,6 +466,35 @@ lower odom jerk than default.
 However, B70 should be tested again because it had even lower odom jerk and
 lower `|force| > 20 N` than B60 in scene 5.
 
+Detailed preference factor:
+
+```text
+Main factor for ANDY: smoother motion / lower jerk compared with default
+Secondary factor: avoiding very overdamped response
+```
+
+Why:
+
+- `default` has the best force metrics in scene 5, but its odom jerk is much
+  higher than `B60`.
+- `B60` greatly reduces odom jerk compared with `default`.
+- `B90` performs poorly in force burden and variance, suggesting too much
+  damping or a less responsive feel.
+- `B70` is objectively promising because it has lower `|force| > 20 N` and
+  lower odom jerk than `B60` in scene 5, but the user reported `B60` as
+  preferred.
+
+This suggests:
+
+```text
+ANDY's preference cannot be explained by force minimization alone. ANDY may have
+preferred the response feel of B60, even though B70 looked slightly better in
+some objective metrics.
+```
+
+The correct next step is not to declare `B60` universally best for ANDY, but to
+repeat `B60` vs `B70` with subjective ratings.
+
 ### MH Preferred Parameter
 
 MH preferred `B=50, M=15`.
@@ -426,6 +516,63 @@ the tested admittance parameters.
 
 This suggests MH may prefer a smoother and more stable interaction, even if the
 high-force duration is not the absolute minimum.
+
+Detailed preference factor:
+
+```text
+Main factor for MH: low jerk and low interaction variability
+Secondary factor: responsive feel from lower mass and damping
+```
+
+Why:
+
+- `B50 M15` has the lowest odom jerk among MH admittance settings.
+- `B50 M15` also has the lowest force variance among MH admittance settings.
+- `B60` has slightly better `|force| > 20 N` and `|force| > 30 N`, but its force
+  variance and jerk are higher than `B50 M15`.
+- `B80` has the highest force variance and highest odom jerk among the tested
+  MH admittance settings.
+
+This suggests:
+
+```text
+MH likely preferred the setting that felt smooth and consistent, even though it
+was not the absolute minimum in high-force duration.
+```
+
+The addition of `M=15` may have also changed response feel. Lower mass can make
+the admittance velocity respond more readily to force input, while lower damping
+can reduce the effort needed to influence velocity. For MH, this combination
+appears to have produced a smoother and more stable interaction than `B80`.
+
+### Cross-User Preference Difference
+
+The preferred settings show three different comfort profiles:
+
+| User | Preferred setting | Best-supported preference factor | Evidence |
+|---|---|---|---|
+| JH | `B=80` | smoother/stable motion with moderate force burden | lower jerk than default, lower variance than B60 |
+| ANDY | `B=60` | smoother motion and preferred response feel | much lower jerk than default, but not minimum force |
+| MH | `B=50, M=15` | low jerk and low force variability | lowest jerk and variance among MH admittance settings |
+
+The main conclusion from this table is:
+
+```text
+Each user appears to weight comfort factors differently.
+```
+
+JH appears to prefer stability without too much reactivity. ANDY appears to care
+strongly about smooth motion and response feel, but the current data cannot
+fully distinguish `B60` from `B70`. MH appears to prefer a more responsive
+low-mass setting when it also produces low jerk and low force variance.
+
+This supports the platform-level claim:
+
+```text
+The important contribution is not one fixed parameter. The important
+contribution is the ability to measure and tune force-based interaction
+according to each user's comfort profile.
+```
 
 ## Smoothing Filter vs Force-Based Control
 
@@ -469,8 +616,11 @@ Main evidence:
    force-command coupling under admittance.
 2. 06_07 JH and ANDY normal scenes showed lower mean force, lower high-force
    duration, and lower force variance under admittance.
-3. Odom jerk was generally similar to keyboard in normal scenes.
-4. Preferred-parameter experiments showed that different users prefer different
+3. Odom jerk was close to keyboard on average in normal scenes, meaning
+   admittance did not add a large average jerk penalty.
+4. Preferred-parameter experiments showed that jerk and force variance can still
+   strongly influence individual preference.
+5. Preferred-parameter experiments showed that different users prefer different
    admittance responses.
 
 Important limitation:
@@ -479,6 +629,68 @@ Important limitation:
 Admittance should not be presented as universally better in every scene.
 Intention-change scenarios and user-specific preferences require additional
 tuning and subjective evaluation.
+```
+
+### Final Detailed Conclusion
+
+The experiments support three levels of conclusion.
+
+First, at the controller level:
+
+```text
+Force-based admittance control is meaningfully different from keyboard control
+or velocity smoothing because it uses the user's physical force as part of the
+control loop.
+```
+
+The 06_04 and 06_07 results show that this can reduce force burden in normal
+walking scenes. JH and ANDY both showed lower mean force, lower high-force
+duration, and lower force variance under admittance than keyboard control in
+normal scenes. This supports the claim that admittance can reduce sustained
+physical effort.
+
+Second, at the comfort level:
+
+```text
+Comfort is not explained by force magnitude alone.
+```
+
+The preferred-parameter experiments show that the user-preferred setting was not
+always the one with the lowest `|force| > 20 N`. For example, JH's `B80` setting
+reduced odom jerk compared with default, even though default had slightly better
+force metrics. ANDY preferred `B60`, which greatly reduced jerk compared with
+default, even though default had lower force burden. MH preferred `B50 M15`,
+which had the lowest jerk and force variance among MH admittance settings.
+
+Therefore, the best current definition of comfort is:
+
+```text
+comfort = force burden + interaction stability + motion smoothness + response
+feeling + subjective preference
+```
+
+Third, at the platform level:
+
+```text
+LAICA should be presented as a user-adaptable admittance-control and evaluation
+pipeline, not as a one-size-fits-all controller.
+```
+
+This is especially important for blind and visually impaired mobility contexts,
+where each person may have a distinct interaction style and may also be used to
+the behavior of their own guide dog. A single fixed admittance parameter is not
+expected to satisfy every person. The stronger contribution is that the LAICA
+pipeline can record force, velocity, odom, and debug signals, compute comfort
+metrics, and reveal how different users prefer different force-to-velocity
+responses.
+
+The final finding is:
+
+```text
+Admittance control is promising because it reduces force burden in normal
+scenes, but its real value is personalization. Future work should tune and
+evaluate admittance parameters per user using both objective metrics and
+subjective ratings.
 ```
 
 ## Recommended Next Experiments
@@ -537,4 +749,3 @@ src/laica_bringup/scripts/analyze_force_cmd_metrics.py \
   --pattern '*_jh_*' \
   --output-dir rosbag_csv_exports/force_cmd_metrics_jh
 ```
-
