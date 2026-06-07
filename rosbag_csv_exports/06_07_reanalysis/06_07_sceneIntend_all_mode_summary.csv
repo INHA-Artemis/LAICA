@@ -1,0 +1,4 @@
+,force_mean_abs,force_mean_abs,force_mean_abs,force_p95_abs,force_p95_abs,force_p95_abs,force_variance,force_variance,force_variance,force_gt10_pct,force_gt10_pct,force_gt10_pct,force_gt20_pct,force_gt20_pct,force_gt20_pct,force_gt30_pct,force_gt30_pct,force_gt30_pct,force_gt40_pct,force_gt40_pct,force_gt40_pct,best_abs_force_cmd_corr,best_abs_force_cmd_corr,best_abs_force_cmd_corr,odom_jerk_p95_abs,odom_jerk_p95_abs,odom_jerk_p95_abs
+,mean,std,count,mean,std,count,mean,std,count,mean,std,count,mean,std,count,mean,std,count,mean,std,count,mean,std,count,mean,std,count
+mode,,,,,,,,,,,,,,,,,,,,,,,,,,,
+unknown,14.287311729446548,3.4288348920258223,4,40.88628317990509,8.863584497254706,4,295.5095220396921,54.558972334858076,4,52.35188229385881,12.688369742720504,4,27.266693548213254,8.84995751397233,4,12.676032591577693,8.031507458153511,4,6.329171205747032,5.06081244667958,4,0.5307838508279474,0.1744001428503444,4,200.80408556478667,35.69623170461167,4
