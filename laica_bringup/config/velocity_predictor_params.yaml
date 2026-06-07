@@ -18,7 +18,7 @@ laica_velocity_predictor:
     # 1D force admittance controller:
     #
     #   M * d(v_adm)/dt + B * v_adm = F_eff
-    #   cmd_vx = base_velocity_mps + v_adm
+    #   cmd_vx = reference_velocity_mps + v_adm
     #
     # The output goes to /cmd_vel so the Unitree driver receives it directly.
     # Do not run another /cmd_vel publisher at the same time.
@@ -42,10 +42,10 @@ laica_velocity_predictor:
     # Admittance parameters and safety limits.
     admittance_mass: 20.0
     admittance_damping: 80.0
-    base_velocity_mps: 0.6
-    min_velocity_mps: -2.0
-    max_velocity_mps: 2.0
-    max_accel_mps2: 0.50
+    base_velocity_mps: 0.5
+    min_velocity_mps: 0.3
+    max_velocity_mps: 1.0
+    max_accel_mps2: 1.00
     sensor_timeout_sec: 0.25
     robot_odom_timeout_sec: 0.50
 
@@ -58,5 +58,7 @@ laica_velocity_predictor:
     #   /laica/debug/admittance_velocity
     #   /laica/debug/control_dt
     #   /laica/debug/admittance_accel
+    #   /laica/debug/reference_velocity
+    #   /laica/debug/command_velocity
     debug_publish_enabled: true
     debug_topic_prefix: "/laica/debug"

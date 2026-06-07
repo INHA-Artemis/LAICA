@@ -19,6 +19,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -312,6 +313,21 @@ private:
     declare_parameter<double>("robot_odom_timeout_sec", robot_odom_timeout_sec_);
     declare_parameter<bool>("debug_publish_enabled", debug_publish_enabled_);
     declare_parameter<std::string>("debug_topic_prefix", debug_topic_prefix_);
+    declare_parameter<bool>("random_reference_speed_enabled",
+                            random_reference_speed_enabled_);
+    declare_parameter<int>("random_reference_speed_scenario_id",
+                           random_reference_speed_scenario_id_);
+    declare_parameter<bool>("random_reference_speed_loop",
+                            random_reference_speed_loop_);
+    declare_parameter<double>("random_reference_speed_initial_velocity_mps",
+                              random_reference_speed_initial_velocity_mps_);
+    declare_parameter<std::vector<double>>(
+        "random_reference_speed_change_times_sec",
+        random_reference_speed_change_times_sec_);
+    declare_parameter<std::vector<double>>(
+        "random_reference_speed_change_velocities_mps",
+        random_reference_speed_change_velocities_mps_);
+    declareRandomReferenceScenarioParameters();
 
     get_parameter("load_cell_topic_name", load_cell_topic_name_);
     get_parameter("encoder_topic_name", encoder_topic_name_);
@@ -346,6 +362,18 @@ private:
     get_parameter("robot_odom_timeout_sec", robot_odom_timeout_sec_);
     get_parameter("debug_publish_enabled", debug_publish_enabled_);
     get_parameter("debug_topic_prefix", debug_topic_prefix_);
+    get_parameter("random_reference_speed_enabled",
+                  random_reference_speed_enabled_);
+    get_parameter("random_reference_speed_scenario_id",
+                  random_reference_speed_scenario_id_);
+    get_parameter("random_reference_speed_loop", random_reference_speed_loop_);
+    get_parameter("random_reference_speed_initial_velocity_mps",
+                  random_reference_speed_initial_velocity_mps_);
+    get_parameter("random_reference_speed_change_times_sec",
+                  random_reference_speed_change_times_sec_);
+    get_parameter("random_reference_speed_change_velocities_mps",
+                  random_reference_speed_change_velocities_mps_);
+    loadSelectedRandomReferenceScenario();
 
     if (load_cell_input_field_ != "raw_count" &&
         load_cell_input_field_ != "voltage_mv" &&
@@ -404,6 +432,69 @@ private:
     {
       debug_topic_prefix_.pop_back();
     }
+
+    validateRandomReferenceSpeed();
+  }
+
+  void declareRandomReferenceScenarioParameters()
+  {
+    declareRandomReferenceScenarioParameters(
+        1, 0.50,
+        {5.0, 10.0, 15.0, 20.0, 25.0, 30.0},
+        {0.60, 0.45, 0.70, 0.50, 0.65, 0.55});
+    declareRandomReferenceScenarioParameters(
+        2, 0.50,
+        {5.0, 10.0, 15.0, 20.0, 25.0, 30.0},
+        {0.75, 0.35, 0.85, 0.40, 0.80, 0.50});
+    declareRandomReferenceScenarioParameters(
+        3, 0.50,
+        {5.0, 10.0, 15.0, 20.0, 25.0, 30.0},
+        {0.65, 0.40, 0.90, 0.35, 0.70, 0.55});
+    declareRandomReferenceScenarioParameters(
+        4, 0.50,
+        {3.0, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0, 24.0, 27.0, 30.0},
+        {0.58, 0.48, 0.68, 0.42, 0.72, 0.46, 0.64, 0.50, 0.76, 0.54});
+    declareRandomReferenceScenarioParameters(
+        5, 0.50,
+        {5.0, 10.0, 15.0, 20.0, 25.0, 30.0},
+        {0.85, 0.35, 1.00, 0.30, 0.75, 0.45});
+  }
+
+  void declareRandomReferenceScenarioParameters(
+      int scenario_id,
+      double initial_velocity_mps,
+      const std::vector<double>& change_times_sec,
+      const std::vector<double>& change_velocities_mps)
+  {
+    const std::string prefix =
+        "random_reference_speed_scenario_" + std::to_string(scenario_id);
+    declare_parameter<double>(prefix + "_initial_velocity_mps",
+                              initial_velocity_mps);
+    declare_parameter<std::vector<double>>(prefix + "_change_times_sec",
+                                           change_times_sec);
+    declare_parameter<std::vector<double>>(prefix + "_change_velocities_mps",
+                                           change_velocities_mps);
+  }
+
+  void loadSelectedRandomReferenceScenario()
+  {
+    const std::string prefix =
+        "random_reference_speed_scenario_" +
+        std::to_string(random_reference_speed_scenario_id_);
+    if (!has_parameter(prefix + "_initial_velocity_mps"))
+    {
+      RCLCPP_WARN(get_logger(),
+                  "Random reference scenario %d is not declared; using flattened random reference parameters.",
+                  random_reference_speed_scenario_id_);
+      return;
+    }
+
+    get_parameter(prefix + "_initial_velocity_mps",
+                  random_reference_speed_initial_velocity_mps_);
+    get_parameter(prefix + "_change_times_sec",
+                  random_reference_speed_change_times_sec_);
+    get_parameter(prefix + "_change_velocities_mps",
+                  random_reference_speed_change_velocities_mps_);
   }
 
   void loadCellCallback(const enc_lc::msg::LoadCellData::SharedPtr msg)
@@ -630,6 +721,10 @@ private:
         debug_topic_prefix_ + "/control_dt", qos);
     debug_admittance_accel_pub_ = create_publisher<std_msgs::msg::Float64>(
         debug_topic_prefix_ + "/admittance_accel", qos);
+    debug_reference_velocity_pub_ = create_publisher<std_msgs::msg::Float64>(
+        debug_topic_prefix_ + "/reference_velocity", qos);
+    debug_command_velocity_pub_ = create_publisher<std_msgs::msg::Float64>(
+        debug_topic_prefix_ + "/command_velocity", qos);
 
     RCLCPP_INFO(get_logger(), "Publishing admittance debug topics under %s",
                 debug_topic_prefix_.c_str());
@@ -667,6 +762,8 @@ private:
                           double zeroed_force_n,
                           double filtered_force_n,
                           double effective_force_n,
+                          double reference_velocity_mps,
+                          double command_velocity_mps,
                           double admittance_velocity_mps,
                           double control_dt_sec,
                           double admittance_accel_mps2)
@@ -680,6 +777,8 @@ private:
     publishDebugValue(debug_zeroed_force_pub_, zeroed_force_n);
     publishDebugValue(debug_filtered_force_pub_, filtered_force_n);
     publishDebugValue(debug_effective_force_pub_, effective_force_n);
+    publishDebugValue(debug_reference_velocity_pub_, reference_velocity_mps);
+    publishDebugValue(debug_command_velocity_pub_, command_velocity_mps);
     publishDebugValue(debug_admittance_velocity_pub_, admittance_velocity_mps);
     publishDebugValue(debug_control_dt_pub_, control_dt_sec);
     publishDebugValue(debug_admittance_accel_pub_, admittance_accel_mps2);
@@ -728,16 +827,19 @@ private:
   double computeAdmittanceVelocity(const rclcpp::Time& now_time)
   {
     const double dt = computeDt(now_time);
+    const double reference_velocity_mps = getReferenceVelocity(now_time);
 
     if (!admittance_enabled_)
     {
       admittance_velocity_mps_ = 0.0;
       filtered_force_n_ = latest_load_cell_input_ - force_zero_offset_;
-      const double cmd_vx = rateLimitAndClamp(base_velocity_mps_, dt);
+      const double cmd_vx = rateLimitAndClamp(reference_velocity_mps, dt);
       publishDebugValues(latest_load_cell_input_,
                          filtered_force_n_,
                          filtered_force_n_,
                          applyDeadband(filtered_force_n_),
+                         reference_velocity_mps,
+                         cmd_vx,
                          admittance_velocity_mps_,
                          dt,
                          0.0);
@@ -753,6 +855,8 @@ private:
                          0.0,
                          filtered_force_n_,
                          0.0,
+                         reference_velocity_mps,
+                         cmd_vx,
                          admittance_velocity_mps_,
                          dt,
                          0.0);
@@ -770,23 +874,120 @@ private:
         admittance_mass_;
     admittance_velocity_mps_ += accel_mps2 * dt;
 
-    const double target_vx = base_velocity_mps_ + admittance_velocity_mps_;
+    const double target_vx = reference_velocity_mps + admittance_velocity_mps_;
     const double cmd_vx = rateLimitAndClamp(target_vx, dt);
     publishDebugValues(latest_load_cell_input_,
                        force_n,
                        filtered_force_n_,
                        signed_force_n,
+                       reference_velocity_mps,
+                       cmd_vx,
                        admittance_velocity_mps_,
                        dt,
                        accel_mps2);
 
     RCLCPP_INFO_THROTTLE(
         get_logger(), *get_clock(), 1000,
-        "Admittance force raw=%.3f zeroed=%.3f filtered=%.3f eff=%.3f adm_vx=%.3f cmd_vx=%.3f",
+        "Admittance force raw=%.3f zeroed=%.3f filtered=%.3f eff=%.3f ref_vx=%.3f adm_vx=%.3f cmd_vx=%.3f",
         latest_load_cell_input_, force_n, filtered_force_n_, signed_force_n,
-        admittance_velocity_mps_, cmd_vx);
+        reference_velocity_mps, admittance_velocity_mps_, cmd_vx);
 
     return cmd_vx;
+  }
+
+  void validateRandomReferenceSpeed()
+  {
+    if (!random_reference_speed_enabled_)
+    {
+      return;
+    }
+
+    if (random_reference_speed_change_times_sec_.size() !=
+        random_reference_speed_change_velocities_mps_.size())
+    {
+      RCLCPP_WARN(get_logger(),
+                  "Random reference change_times and change_velocities lengths differ; disabling random reference.");
+      random_reference_speed_enabled_ = false;
+      return;
+    }
+
+    if (random_reference_speed_change_times_sec_.empty())
+    {
+      RCLCPP_WARN(get_logger(),
+                  "Random reference enabled but no changes are configured; disabling random reference.");
+      random_reference_speed_enabled_ = false;
+      return;
+    }
+
+    double previous_time = 0.0;
+    for (const double change_time : random_reference_speed_change_times_sec_)
+    {
+      if (change_time <= previous_time)
+      {
+        RCLCPP_WARN(get_logger(),
+                    "Random reference change times must be strictly increasing; disabling random reference.");
+        random_reference_speed_enabled_ = false;
+        return;
+      }
+      previous_time = change_time;
+    }
+  }
+
+  double getReferenceVelocity(const rclcpp::Time& now_time)
+  {
+    double reference_velocity_mps = base_velocity_mps_;
+    if (random_reference_speed_enabled_)
+    {
+      if (!has_random_reference_start_time_)
+      {
+        random_reference_start_time_ = now_time;
+        has_random_reference_start_time_ = true;
+      }
+
+      double scenario_time_sec = (now_time - random_reference_start_time_).seconds();
+      scenario_time_sec = std::max(0.0, scenario_time_sec);
+
+      const double final_time = random_reference_speed_change_times_sec_.back();
+      if (random_reference_speed_loop_ && final_time > 0.0)
+      {
+        scenario_time_sec = std::fmod(scenario_time_sec, final_time);
+      }
+
+      reference_velocity_mps = random_reference_speed_initial_velocity_mps_;
+      for (std::size_t i = 0; i < random_reference_speed_change_times_sec_.size(); ++i)
+      {
+        if (scenario_time_sec < random_reference_speed_change_times_sec_[i])
+        {
+          break;
+        }
+        reference_velocity_mps = random_reference_speed_change_velocities_mps_[i];
+      }
+    }
+
+    reference_velocity_mps =
+        std::max(min_velocity_mps_, std::min(max_velocity_mps_, reference_velocity_mps));
+    logReferenceVelocityIfChanged(reference_velocity_mps);
+    return reference_velocity_mps;
+  }
+
+  void logReferenceVelocityIfChanged(double reference_velocity_mps)
+  {
+    if (has_last_reference_velocity_ &&
+        std::abs(reference_velocity_mps - last_reference_velocity_mps_) < 1.0e-9)
+    {
+      return;
+    }
+
+    has_last_reference_velocity_ = true;
+    last_reference_velocity_mps_ = reference_velocity_mps;
+
+    if (random_reference_speed_enabled_)
+    {
+      RCLCPP_INFO(get_logger(),
+                  "Reference speed scenario changed: scenario=%d, ref_vx=%.3f m/s",
+                  random_reference_speed_scenario_id_,
+                  reference_velocity_mps);
+    }
   }
 
   double computeDt(const rclcpp::Time& now_time)
@@ -884,6 +1085,8 @@ private:
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr debug_admittance_velocity_pub_;
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr debug_control_dt_pub_;
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr debug_admittance_accel_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr debug_reference_velocity_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr debug_command_velocity_pub_;
   rclcpp::TimerBase::SharedPtr publish_timer_;
 
   std::string load_cell_topic_name_;
@@ -935,6 +1138,19 @@ private:
   double max_accel_mps2_ = 0.50;
   double sensor_timeout_sec_ = 0.25;
   double robot_odom_timeout_sec_ = 0.50;
+
+  bool random_reference_speed_enabled_ = false;
+  int random_reference_speed_scenario_id_ = 3;
+  bool random_reference_speed_loop_ = true;
+  double random_reference_speed_initial_velocity_mps_ = 0.25;
+  std::vector<double> random_reference_speed_change_times_sec_ =
+      {4.0, 8.0, 12.0, 16.0, 20.0};
+  std::vector<double> random_reference_speed_change_velocities_mps_ =
+      {0.32, 0.18, 0.38, 0.22, 0.30};
+  rclcpp::Time random_reference_start_time_;
+  bool has_random_reference_start_time_ = false;
+  double last_reference_velocity_mps_ = 0.0;
+  bool has_last_reference_velocity_ = false;
 
   double filtered_force_n_ = 0.0;
   bool has_filtered_force_ = false;

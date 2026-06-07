@@ -1,0 +1,32 @@
+"/**":
+  ros__parameters:
+    # Applies to both keyboard_forward_stop and laica_velocity_predictor.
+    # Change this one id to run a different deterministic speed scenario.
+    random_reference_speed_enabled: true
+    random_reference_speed_scenario_id: 5
+    random_reference_speed_loop: true
+
+    # Scenario 1: 5+ clear speed levels
+    random_reference_speed_scenario_1_initial_velocity_mps: 0.60
+    random_reference_speed_scenario_1_change_times_sec: [5.0, 10.0, 15.0, 20.0, 25.0, 30.0]
+    random_reference_speed_scenario_1_change_velocities_mps: [0.30, 0.45, 0.60, 0.75, 0.90, 0.55]
+
+    # Scenario 2: rising high-range levels, then recovery
+    random_reference_speed_scenario_2_initial_velocity_mps: 0.60
+    random_reference_speed_scenario_2_change_times_sec: [5.0, 10.0, 15.0, 20.0, 25.0, 30.0]
+    random_reference_speed_scenario_2_change_velocities_mps: [0.35, 0.55, 0.80, 1.00, 0.65, 0.40]
+
+    # Scenario 3: alternating low/high levels
+    random_reference_speed_scenario_3_initial_velocity_mps: 0.60
+    random_reference_speed_scenario_3_change_times_sec: [5.0, 10.0, 15.0, 20.0, 25.0, 30.0]
+    random_reference_speed_scenario_3_change_velocities_mps: [0.90, 0.50, 0.70, 0.30, 1.00, 0.60]
+
+    # Scenario 4: frequent 5+ level changes
+    random_reference_speed_scenario_4_initial_velocity_mps: 0.60
+    random_reference_speed_scenario_4_change_times_sec: [3.0, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0, 24.0, 27.0, 30.0]
+    random_reference_speed_scenario_4_change_velocities_mps: [0.35, 0.50, 0.65, 0.80, 0.95, 0.40, 0.75, 0.30, 0.85, 0.55]
+
+    # Scenario 5: full allowed range
+    random_reference_speed_scenario_5_initial_velocity_mps: 0.60
+    random_reference_speed_scenario_5_change_times_sec: [5.0, 10.0, 15.0, 20.0, 25.0, 30.0]
+    random_reference_speed_scenario_5_change_velocities_mps: [0.85, 0.35, 1.00, 0.30, 0.75, 0.45]

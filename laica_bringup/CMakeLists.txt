@@ -36,6 +36,7 @@ install(TARGETS laica_velocity_predictor
 
 install(PROGRAMS
   scripts/keyboard_forward_stop.py
+  scripts/random_reference_speed.py
   scripts/keyboard_teleop.py
   scripts/live_plot_sensors.py
   scripts/live_plot_admittance.py

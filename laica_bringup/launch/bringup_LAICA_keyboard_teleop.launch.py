@@ -67,6 +67,8 @@ def launch_after_robot_ready(context):
     unitree_params_file = LaunchConfiguration("unitree_params_file")
     arduino_params_file = LaunchConfiguration("arduino_params_file")
     keyboard_params_file = LaunchConfiguration("keyboard_params_file")
+    random_reference_params_file = LaunchConfiguration("random_reference_params_file")
+    scenario = LaunchConfiguration("scenario")
     wifi = LaunchConfiguration("wifi")
     unitree_robot_ip = LaunchConfiguration("unitree_robot_ip")
     arduino_port = LaunchConfiguration("arduino_port")
@@ -141,8 +143,12 @@ def launch_after_robot_ready(context):
             additional_env=ros_env,
             parameters=[
                 keyboard_params_file,
+                random_reference_params_file,
                 {
                     "robot_ip": unitree_robot_ip,
+                    "random_reference_speed_scenario_id": ParameterValue(
+                        scenario, value_type=int
+                    ),
                 },
             ],
         )
@@ -192,6 +198,13 @@ def generate_launch_description():
                     laica_dir, "config", "keyboard_forward_stop_params.yaml"
                 ),
             ),
+            DeclareLaunchArgument(
+                "random_reference_params_file",
+                default_value=os.path.join(
+                    laica_dir, "config", "random_reference_speed_params.yaml"
+                ),
+            ),
+            DeclareLaunchArgument("scenario", default_value="5"),
             DeclareLaunchArgument("wifi", default_value="false"),
             DeclareLaunchArgument("unitree_robot_ip", default_value="192.168.123.161"),
             DeclareLaunchArgument("robot_connection_timeout_sec", default_value="10.0"),

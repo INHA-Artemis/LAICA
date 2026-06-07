@@ -14,6 +14,7 @@ from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from std_msgs.msg import Float64
 
+from random_reference_speed import RandomReferenceSpeed
 
 HELP_TEXT = """
 LAICA forward/stop keyboard control
@@ -22,6 +23,34 @@ w : hold forward target speed
 s : stop
 q : quit
 """
+
+DEFAULT_REFERENCE_SCENARIOS = {
+    1: {
+        "initial": 0.50,
+        "times": [5.0, 10.0, 15.0, 20.0, 25.0, 30.0],
+        "velocities": [0.60, 0.45, 0.70, 0.50, 0.65, 0.55],
+    },
+    2: {
+        "initial": 0.50,
+        "times": [5.0, 10.0, 15.0, 20.0, 25.0, 30.0],
+        "velocities": [0.75, 0.35, 0.85, 0.40, 0.80, 0.50],
+    },
+    3: {
+        "initial": 0.50,
+        "times": [5.0, 10.0, 15.0, 20.0, 25.0, 30.0],
+        "velocities": [0.65, 0.40, 0.90, 0.35, 0.70, 0.55],
+    },
+    4: {
+        "initial": 0.50,
+        "times": [3.0, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0, 24.0, 27.0, 30.0],
+        "velocities": [0.58, 0.48, 0.68, 0.42, 0.72, 0.46, 0.64, 0.50, 0.76, 0.54],
+    },
+    5: {
+        "initial": 0.50,
+        "times": [5.0, 10.0, 15.0, 20.0, 25.0, 30.0],
+        "velocities": [0.85, 0.35, 1.00, 0.30, 0.75, 0.45],
+    },
+}
 
 
 class KeyboardForwardStop(Node):
@@ -35,11 +64,26 @@ class KeyboardForwardStop(Node):
         self.declare_parameter("enable_runtime_ping_check", False)
         self.declare_parameter("max_missed_pings", 3)
         self.declare_parameter("repeat_rate_hz", 20.0)
-        self.declare_parameter("target_velocity_mps", 0.5)
-        self.declare_parameter("max_accel_mps2", 0.1)
+        self.declare_parameter("target_velocity_mps", 0.25)
+        self.declare_parameter("min_velocity_mps", 0.0)
+        self.declare_parameter("max_velocity_mps", 0.40)
+        self.declare_parameter("max_accel_mps2", 0.50)
         self.declare_parameter("load_cell_topic_name", "/load_cell/data")
         self.declare_parameter("debug_publish_enabled", True)
         self.declare_parameter("debug_topic_prefix", "/laica/teleop_debug")
+        self.declare_parameter("random_reference_speed_enabled", False)
+        self.declare_parameter("random_reference_speed_scenario_id", 3)
+        self.declare_parameter("random_reference_speed_loop", True)
+        self.declare_parameter("random_reference_speed_initial_velocity_mps", 0.25)
+        self.declare_parameter(
+            "random_reference_speed_change_times_sec",
+            [4.0, 8.0, 12.0, 16.0, 20.0],
+        )
+        self.declare_parameter(
+            "random_reference_speed_change_velocities_mps",
+            [0.32, 0.18, 0.38, 0.22, 0.30],
+        )
+        self.declare_random_reference_scenarios()
 
         self.cmd_vel_topic_name = self.get_parameter("cmd_vel_topic_name").value
         odom_topic_name = self.get_parameter("odom_topic_name").value
@@ -58,6 +102,8 @@ class KeyboardForwardStop(Node):
         self.target_velocity_mps = float(
             self.get_parameter("target_velocity_mps").value
         )
+        self.min_velocity_mps = float(self.get_parameter("min_velocity_mps").value)
+        self.max_velocity_mps = float(self.get_parameter("max_velocity_mps").value)
         self.max_accel_mps2 = max(
             0.0, float(self.get_parameter("max_accel_mps2").value)
         )
@@ -71,6 +117,23 @@ class KeyboardForwardStop(Node):
 
         self.publisher = None
         self.debug_publishers = {}
+        (
+            random_reference_initial_velocity_mps,
+            random_reference_change_times_sec,
+            random_reference_change_velocities_mps,
+        ) = self.selected_random_reference_params()
+        self.random_reference = RandomReferenceSpeed(
+            self,
+            self.get_parameter("random_reference_speed_enabled").value,
+            self.get_parameter("random_reference_speed_scenario_id").value,
+            self.get_parameter("random_reference_speed_loop").value,
+            self.target_velocity_mps,
+            random_reference_initial_velocity_mps,
+            random_reference_change_times_sec,
+            random_reference_change_velocities_mps,
+            self.min_velocity_mps,
+            self.max_velocity_mps,
+        )
         self.odom_sub = self.create_subscription(
             Odometry, odom_topic_name, self.odom_callback, 10
         )
@@ -80,6 +143,9 @@ class KeyboardForwardStop(Node):
         self.target_command_velocity_mps = 0.0
         self.current_command_velocity_mps = 0.0
         self.last_publish_time = None
+        self.forward_tracking_enabled = False
+        self.experiment_start_time = time.monotonic()
+        self.latest_reference_velocity_mps = 0.0
         self.last_odom_time = None
         self.last_ping_time = 0.0
         self.last_ping_ok = False
@@ -102,6 +168,39 @@ class KeyboardForwardStop(Node):
             f"Subscribing to load-cell force for keyboard logs: {load_cell_topic_name}"
         )
 
+    def declare_random_reference_scenarios(self):
+        for scenario_id, scenario in DEFAULT_REFERENCE_SCENARIOS.items():
+            prefix = f"random_reference_speed_scenario_{scenario_id}"
+            self.declare_parameter(
+                f"{prefix}_initial_velocity_mps", scenario["initial"]
+            )
+            self.declare_parameter(
+                f"{prefix}_change_times_sec", scenario["times"]
+            )
+            self.declare_parameter(
+                f"{prefix}_change_velocities_mps", scenario["velocities"]
+            )
+
+    def selected_random_reference_params(self):
+        scenario_id = int(self.get_parameter("random_reference_speed_scenario_id").value)
+        prefix = f"random_reference_speed_scenario_{scenario_id}"
+        if self.has_parameter(f"{prefix}_initial_velocity_mps"):
+            return (
+                self.get_parameter(f"{prefix}_initial_velocity_mps").value,
+                self.get_parameter(f"{prefix}_change_times_sec").value,
+                self.get_parameter(f"{prefix}_change_velocities_mps").value,
+            )
+
+        self.get_logger().warn(
+            f"Random reference scenario {scenario_id} is not declared; "
+            "falling back to flattened random reference parameters."
+        )
+        return (
+            self.get_parameter("random_reference_speed_initial_velocity_mps").value,
+            self.get_parameter("random_reference_speed_change_times_sec").value,
+            self.get_parameter("random_reference_speed_change_velocities_mps").value,
+        )
+
     def normalize_topic_prefix(self, prefix):
         prefix = str(prefix or "/laica/teleop_debug")
         if not prefix.startswith("/"):
@@ -112,7 +211,13 @@ class KeyboardForwardStop(Node):
         self.last_odom_time = time.monotonic()
 
     def create_debug_publishers(self):
-        for topic in ["raw_force", "zeroed_force", "filtered_force"]:
+        for topic in [
+            "raw_force",
+            "zeroed_force",
+            "filtered_force",
+            "reference_velocity",
+            "command_velocity",
+        ]:
             self.debug_publishers[topic] = self.create_publisher(
                 Float64, f"{self.debug_topic_prefix}/{topic}", 10
             )
@@ -155,8 +260,11 @@ class KeyboardForwardStop(Node):
 
     def handle_key(self, key):
         if key == "w":
-            self.target_command_velocity_mps = self.target_velocity_mps
+            self.forward_tracking_enabled = True
+            self.experiment_start_time = time.monotonic()
+            self.update_reference_velocity()
         elif key == "s":
+            self.forward_tracking_enabled = False
             self.target_command_velocity_mps = 0.0
         else:
             return
@@ -175,6 +283,8 @@ class KeyboardForwardStop(Node):
         if self.publisher is None:
             return
 
+        if self.forward_tracking_enabled:
+            self.update_reference_velocity()
         self.update_current_velocity()
 
         msg = Twist()
@@ -185,8 +295,16 @@ class KeyboardForwardStop(Node):
         msg.angular.y = 0.0
         msg.angular.z = 0.0
         self.publisher.publish(msg)
+        if self.debug_publish_enabled:
+            self.publish_debug_float(
+                "reference_velocity", self.latest_reference_velocity_mps
+            )
+            self.publish_debug_float(
+                "command_velocity", self.current_command_velocity_mps
+            )
 
     def stop(self):
+        self.forward_tracking_enabled = False
         self.target_command_velocity_mps = 0.0
         self.current_command_velocity_mps = 0.0
         self.publish_cmd()
@@ -194,6 +312,13 @@ class KeyboardForwardStop(Node):
     def repeat_cmd(self):
         if self.ready_to_command():
             self.publish_cmd()
+
+    def update_reference_velocity(self):
+        elapsed_sec = time.monotonic() - self.experiment_start_time
+        self.latest_reference_velocity_mps = self.random_reference.get_reference_velocity(
+            elapsed_sec
+        )
+        self.target_command_velocity_mps = self.latest_reference_velocity_mps
 
     def update_current_velocity(self):
         now = time.monotonic()
