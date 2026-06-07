@@ -47,37 +47,38 @@ arduino_sensor_pub waits 5 s for loadcell startup calibration
 -> laica_velocity_predictor starts only after calibration_done == true
 ```
 
-By default, predictor output is safe:
+The current predictor config sends output directly to the robot command topic:
 
 ```text
-/laica/predicted_cmd_vel
+/cmd_vel
 ```
 
-To command the robot directly:
+Do not run another `/cmd_vel` publisher at the same time.
 
-```bash
-ros2 launch laica_bringup bringup_LAICA.launch \
-  predicted_cmd_vel_topic_name:=/cmd_vel
-```
-
-To drive manually with keyboard teleop:
+To drive with the simplified keyboard forward/stop controller:
 
 ```bash
 ros2 launch laica_bringup bringup_LAICA_keyboard_teleop.launch.py
 ```
 
-This keyboard launch disables admittance control by default, so the simple
-forward/stop keyboard node is the only motion-command source to `/cmd_vel`.
-It publishes to `/cmd_vel` by default. It also waits up to 10 s for the Unitree
-robot IP before starting the nodes, so the launch exits cleanly if the robot is
-off. Keyboard defaults live in
-`src/laica_bringup/config/keyboard_forward_stop_params.yaml`.
+This starts:
 
-To send keyboard commands to a different topic:
+```text
+unitree driver
+arduino_sensor_pub
+keyboard_forward_stop.py
+```
+
+The keyboard node is the only motion-command source to `/cmd_vel` in this mode.
+It does not use full twist teleop. Press `w` once to start following the selected
+forward reference-speed scenario, press `s` to stop, and press `q` to quit.
+Angular velocity is always zero.
+
+To choose one of the deterministic speed scenarios:
 
 ```bash
 ros2 launch laica_bringup bringup_LAICA_keyboard_teleop.launch.py \
-  keyboard_cmd_vel_topic_name:=/your_cmd_vel_topic
+  scenario:=3
 ```
 
 To wait longer for the robot to come online:
@@ -86,6 +87,38 @@ To wait longer for the robot to come online:
 ros2 launch laica_bringup bringup_LAICA_keyboard_teleop.launch.py \
   robot_connection_timeout_sec:=30.0
 ```
+
+Keyboard defaults live in:
+
+```text
+src/laica_bringup/config/keyboard_forward_stop_params.yaml
+```
+
+To run the admittance controller with the same deterministic reference-speed
+scenarios:
+
+```bash
+ros2 launch laica_bringup bringup_LAICA_random_reference.launch.py
+```
+
+To choose a scenario from the command line:
+
+```bash
+ros2 launch laica_bringup bringup_LAICA_random_reference.launch.py \
+  scenario:=3
+```
+
+This starts:
+
+```text
+unitree driver
+arduino_sensor_pub
+laica_velocity_predictor
+```
+
+The predictor publishes directly to `/cmd_vel` in this launch. Do not run the
+keyboard controller and admittance controller at the same time unless they publish
+to different command topics.
 
 ### Rosbag / Plot Test
 
@@ -127,8 +160,10 @@ not contain `/load_cell/calibration_done`.
 /encoder/data                Encoder data, not used by 1D admittance by default
 /odom                        Robot feedback
 /cmd_vel                     Unitree command input
-/laica/predicted_cmd_vel     Safe predictor output
+/laica/predicted_cmd_vel     Optional non-robot predictor output
 /laica/admittance_cmd_vel    Plot-test admittance output
+/laica/debug/*               Admittance debug values
+/laica/teleop_debug/*        Keyboard/reference debug values
 ```
 
 ## Major Parameters
@@ -141,14 +176,38 @@ not contain `/load_cell/calibration_done`.
 | `start_arduino_sensor_node` | `true` | Start Arduino sensor publisher |
 | `arduino_port` | `/dev/ttyACM0` | Arduino serial port |
 | `load_cell_startup_calibration_sec` | `5.0` | Sensor calibration time |
-| `predicted_cmd_vel_topic_name` | `/laica/predicted_cmd_vel` | Predictor output topic |
+| `predicted_cmd_vel_topic_name` | `/cmd_vel` | Predictor output topic from config |
 | `require_load_cell_calibration_done` | `true` | Wait for calibration flag |
 | `load_cell_input_field` | `force_n` | Loadcell field used by controller |
-| `force_deadband_n` | `10.0` | Ignore small force around zero |
+| `force_deadband_n` | `5.0` | Ignore small force around zero |
 | `force_velocity_sign` | `1.0` | Force-to-velocity sign |
-| `base_velocity_mps` | `0.0` | Constant velocity offset |
-| `max_velocity_mps` | `0.40` | Max `linear.x` command |
+| `base_velocity_mps` | `0.5` | Fallback/reference velocity offset |
+| `min_velocity_mps` | `0.3` | Min `linear.x` command |
+| `max_velocity_mps` | `1.0` | Max `linear.x` command |
+| `max_accel_mps2` | `1.00` | Command acceleration limit |
 | `sensor_timeout_sec` | `0.25` | Stop if loadcell data is stale |
+
+### `bringup_LAICA_keyboard_teleop.launch.py`
+
+| Argument | Default | Meaning |
+|---|---:|---|
+| `scenario` | `5` | Reference-speed scenario number, `1` to `5` |
+| `start_unitree_driver` | `true` | Start Unitree driver |
+| `start_arduino_sensor_node` | `true` | Start Arduino sensor publisher |
+| `robot_connection_timeout_sec` | `10.0` | Wait time for robot IP before exiting |
+| `unitree_robot_ip` | `192.168.123.161` | Robot IP address |
+| `keyboard_params_file` | `keyboard_forward_stop_params.yaml` | Keyboard controller config |
+| `random_reference_params_file` | `random_reference_speed_params.yaml` | Shared scenario config |
+
+### `bringup_LAICA_random_reference.launch.py`
+
+| Argument | Default | Meaning |
+|---|---:|---|
+| `scenario` | `5` | Reference-speed scenario number, `1` to `5` |
+| `start_unitree_driver` | `true` | Start Unitree driver |
+| `start_arduino_sensor_node` | `true` | Start Arduino sensor publisher |
+| `predictor_params_file` | `velocity_predictor_params.yaml` | Admittance controller config |
+| `random_reference_params_file` | `random_reference_speed_params.yaml` | Shared scenario config |
 
 ### `live_admittance_plot.launch.py`
 
@@ -183,21 +242,79 @@ Main values:
 ```yaml
 load_cell_topic_name: "/load_cell/data"
 load_cell_calibration_done_topic_name: "/load_cell/calibration_done"
-predicted_cmd_vel_topic_name: "/laica/predicted_cmd_vel"
+predicted_cmd_vel_topic_name: "/cmd_vel"
 require_load_cell_calibration_done: true
 require_encoder: false
 auto_zero_force: true
 zero_force_duration_sec: 3.0
-force_filter_tau_sec: 0.25
-force_deadband_n: 10.0
+force_filter_tau_sec: 0.15
+force_deadband_n: 5.0
 force_velocity_sign: 1.0
-admittance_mass: 40.0
-admittance_damping: 160.0
-base_velocity_mps: 0.0
-min_velocity_mps: 0.0
-max_velocity_mps: 0.40
-max_accel_mps2: 0.50
+admittance_mass: 15.0
+admittance_damping: 50.0
+base_velocity_mps: 0.5
+min_velocity_mps: 0.3
+max_velocity_mps: 1.0
+max_accel_mps2: 1.00
 sensor_timeout_sec: 0.25
+```
+
+## Deterministic Reference Scenarios
+
+Shared reference-speed scenarios are in:
+
+```text
+laica_bringup/config/random_reference_speed_params.yaml
+```
+
+The YAML uses a shared ROS 2 wildcard block, so the same scenario definitions are
+loaded by both `keyboard_forward_stop` and `laica_velocity_predictor`.
+
+```yaml
+"/**":
+  ros__parameters:
+    random_reference_speed_enabled: true
+    random_reference_speed_scenario_id: 5
+    random_reference_speed_loop: true
+```
+
+Each scenario runs for up to 30 s and stays inside the configured safety range.
+The current scenario ranges are:
+
+```text
+scenario 1: 0.30 - 0.90 m/s, 6 levels
+scenario 2: 0.35 - 1.00 m/s, 6 levels
+scenario 3: 0.30 - 1.00 m/s, 6 levels
+scenario 4: 0.30 - 0.95 m/s, 10 levels
+scenario 5: 0.30 - 1.00 m/s, 6 levels
+```
+
+Use `scenario:=N` at launch time to override the YAML-selected scenario.
+
+## Debug Topics
+
+Keyboard forward/stop debug topics:
+
+```text
+/laica/teleop_debug/raw_force
+/laica/teleop_debug/zeroed_force
+/laica/teleop_debug/filtered_force
+/laica/teleop_debug/reference_velocity
+/laica/teleop_debug/command_velocity
+```
+
+Admittance debug topics:
+
+```text
+/laica/debug/raw_force
+/laica/debug/zeroed_force
+/laica/debug/filtered_force
+/laica/debug/effective_force
+/laica/debug/admittance_velocity
+/laica/debug/control_dt
+/laica/debug/admittance_accel
+/laica/debug/reference_velocity
+/laica/debug/command_velocity
 ```
 
 ## Useful Checks
@@ -205,6 +322,6 @@ sensor_timeout_sec: 0.25
 ```bash
 ros2 topic echo /load_cell/calibration_done
 ros2 topic echo /load_cell/data
-ros2 topic echo /laica/predicted_cmd_vel
+ros2 topic echo /cmd_vel
 ros2 topic echo /odom
 ```
